@@ -6,6 +6,7 @@ import { ProductManager } from "@/components/product-manager";
 import { SalesFinanceManager } from "@/components/sales-finance-manager";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/lib/use-auth-session";
+import { BusinessProvider } from "@/lib/business-store";
 
 // The home route ships no og:image, so serve-time hosting can inject the
 // project's social preview (explicit og:image or latest screenshot).
@@ -69,7 +70,7 @@ function Index() {
 
   if (!session) return <Navigate to="/login" />;
 
-  return <Dashboard email={session.user.email ?? ""} />;
+  return <Dashboard key={session.user.id} email={session.user.email ?? ""} />;
 }
 
 function Dashboard({ email }: { email: string }) {
@@ -147,7 +148,7 @@ function Dashboard({ email }: { email: string }) {
             </div>
           </section>
 
-          {activeArea === "estoque" ? (
+          <BusinessProvider>{activeArea === "estoque" ? (
             <InventoryManager />
           ) : activeArea === "produtos" ? (
             <ProductManager />
@@ -208,7 +209,7 @@ function Dashboard({ email }: { email: string }) {
                 </button>
               )}
             </section>
-          )}
+          )}</BusinessProvider>
 
           <footer className="page-footer">Um painel feito para acompanhar cada fornada. <span>♡</span></footer>
         </div>

@@ -28,3 +28,7 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Business data is persisted through authenticated TanStack server functions and owner-scoped Supabase tables; never use the admin client for ordinary records.
+- The shared business provider commits complete operations through a revision-checked SQL transaction so production and sales cannot partially save or silently overwrite another device.
+- Legacy browser records require explicit account-specific import; never automatically assign unscoped records to a signed-in user.
