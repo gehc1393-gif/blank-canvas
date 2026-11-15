@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, Plus, Search } from "lucide-react";
+
+import { useBusinessStore } from "@/lib/business-store";
 
 type Material = {
   id: string;
@@ -34,8 +36,6 @@ type MovementDraft = {
   note: string;
 };
 
-const MATERIALS_KEY = "ana-bolachas-materias-primas-v1";
-const MOVEMENTS_KEY = "ana-bolachas-movimentacoes-estoque-v1";
 const units = ["kg", "g", "L", "ml", "unidade", "pacote"];
 const emptyMaterialDraft: MaterialDraft = {
   name: "",
@@ -51,32 +51,6 @@ const emptyMovementDraft: MovementDraft = {
   note: "",
 };
 
-function isMaterial(value: unknown): value is Material {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return (
-    typeof item["id"] === "string" &&
-    typeof item["name"] === "string" &&
-    typeof item["unit"] === "string" &&
-    typeof item["quantity"] === "number" &&
-    typeof item["minimum"] === "number" &&
-    typeof item["unitCost"] === "number"
-  );
-}
-
-function isMovement(value: unknown): value is Movement {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return (
-    typeof item["id"] === "string" &&
-    typeof item["materialId"] === "string" &&
-    (item["kind"] === "entrada" || item["kind"] === "saida") &&
-    typeof item["quantity"] === "number" &&
-    typeof item["note"] === "string" &&
-    typeof item["createdAt"] === "string"
-  );
-}
-
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -90,44 +64,15 @@ function formatCurrency(value: number) {
 }
 
 export function InventoryManager() {
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [movements, setMovements] = useState<Movement[]>([]);
-  const [ready, setReady] = useState(false);
+  const { data, commit } = useBusinessStore();
+  const { materials, movements } = data;
+  const ready = true;
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [materialDraft, setMaterialDraft] = useState<MaterialDraft>(emptyMaterialDraft);
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [movementDraft, setMovementDraft] = useState<MovementDraft>(emptyMovementDraft);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    try {
-      const savedMaterials = localStorage.getItem(MATERIALS_KEY);
-      const savedMovements = localStorage.getItem(MOVEMENTS_KEY);
-      if (savedMaterials) {
-        const parsed: unknown = JSON.parse(savedMaterials);
-        if (Array.isArray(parsed)) setMaterials(parsed.filter(isMaterial));
-      }
-      if (savedMovements) {
-        const parsed: unknown = JSON.parse(savedMovements);
-        if (Array.isArray(parsed)) setMovements(parsed.filter(isMovement));
-      }
-    } catch {
-      setMessage("Não foi possível carregar os dados salvos neste navegador.");
-    } finally {
-      setReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(MATERIALS_KEY, JSON.stringify(materials));
-      localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements));
-    } catch {
-      setMessage("Não foi possível salvar. Verifique o espaço disponível no navegador.");
-    }
-  }, [ready, materials, movements]);
 
   const filteredMaterials = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
@@ -145,7 +90,7 @@ export function InventoryManager() {
     (first, second) => second.createdAt.localeCompare(first.createdAt),
   ).slice(0, 6);
 
-  function createMaterial(event: FormEvent<HTMLFormElement>) {
+  async function createMaterial(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const quantity = Number(materialDraft.quantity);
     const minimum = Number(materialDraft.minimum);
@@ -167,26 +112,14 @@ export function InventoryManager() {
       minimum,
       unitCost,
     };
-    setMaterials((current) => [...current, material]);
-    if (quantity > 0) {
-      setMovements((current) => [
-        {
-          id: makeId(),
-          materialId: material.id,
-          kind: "entrada",
-          quantity,
-          note: "Saldo inicial do cadastro",
-          createdAt: new Date().toISOString(),
-        },
-        ...current,
-      ]);
-    }
+    const initialMovement: Movement = { id: makeId(), materialId: material.id, kind: "entrada", quantity, note: "Saldo inicial do cadastro", createdAt: new Date().toISOString() };
+    if (!await commit({ ...data, materials: [...materials, material], movements: quantity > 0 ? [initialMovement, ...movements] : movements })) return;
     setMaterialDraft(emptyMaterialDraft);
     setShowMaterialForm(false);
     setMessage(`${material.name} foi adicionada ao estoque.`);
   }
 
-  function saveMovement(event: FormEvent<HTMLFormElement>) {
+  async function saveMovement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const material = materials.find((item) => item.id === adjustingId);
     const quantity = Number(movementDraft.quantity);
@@ -204,25 +137,13 @@ export function InventoryManager() {
       return;
     }
 
-    setMaterials((current) => current.map((item) => {
-      if (item.id !== material.id) return item;
-      return {
-        ...item,
-        quantity: item.quantity + (movementDraft.kind === "entrada" ? quantity : -quantity),
-        ...(movementDraft.kind === "entrada" && updatedCost !== undefined ? { unitCost: updatedCost } : {}),
-      };
-    }));
-    setMovements((current) => [
-      {
-        id: makeId(),
-        materialId: material.id,
-        kind: movementDraft.kind,
-        quantity,
-        note: movementDraft.note.trim() || (movementDraft.kind === "entrada" ? "Entrada de estoque" : "Saída de estoque"),
-        createdAt: new Date().toISOString(),
-      },
-      ...current,
-    ]);
+    const nextMaterials = materials.map((item) => item.id !== material.id ? item : {
+      ...item,
+      quantity: item.quantity + (movementDraft.kind === "entrada" ? quantity : -quantity),
+      ...(movementDraft.kind === "entrada" && updatedCost !== undefined ? { unitCost: updatedCost } : {}),
+    });
+    const movement: Movement = { id: makeId(), materialId: material.id, kind: movementDraft.kind, quantity, note: movementDraft.note.trim() || (movementDraft.kind === "entrada" ? "Entrada de estoque" : "Saída de estoque"), createdAt: new Date().toISOString() };
+    if (!await commit({ ...data, materials: nextMaterials, movements: [movement, ...movements] })) return;
     setMessage(`${movementDraft.kind === "entrada" ? "Entrada" : "Saída"} registrada para ${material.name}.`);
     setAdjustingId(null);
     setMovementDraft(emptyMovementDraft);
@@ -401,7 +322,7 @@ export function InventoryManager() {
         )}
       </div>
 
-      <p className="text-center text-[11px] text-[#a19488]">Neste momento, os dados de estoque ficam salvos neste navegador.</p>
+      <p className="text-center text-[11px] text-[#a19488]">Os registros de estoque ficam salvos na sua conta.</p>
     </section>
   );
 }

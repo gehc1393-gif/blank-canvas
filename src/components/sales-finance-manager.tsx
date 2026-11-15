@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowDownToLine, ArrowUpRight, CircleDollarSign, ClipboardList, Plus, ReceiptText, Tag } from "lucide-react";
+
+import { useBusinessStore } from "@/lib/business-store";
 
 type Material = {
   id: string;
@@ -38,11 +40,6 @@ type SaleDraft = { productId: string; quantity: string; unitPrice: string };
 type ExpenseDraft = { description: string; category: string; amount: string; spentAt: string };
 type ManagerMode = "vendas" | "financeiro";
 
-const PRODUCTS_KEY = "ana-bolachas-produtos-v1";
-const MATERIALS_KEY = "ana-bolachas-materias-primas-v1";
-const SALES_KEY = "ana-bolachas-vendas-v1";
-const EXPENSES_KEY = "ana-bolachas-despesas-v1";
-const PRICES_KEY = "ana-bolachas-precos-v1";
 const expenseCategories = ["Ingredientes", "Embalagens", "Produção", "Entrega", "Equipamentos", "Outros"];
 
 function makeId() {
@@ -65,95 +62,13 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
 }
 
-function isMaterial(value: unknown): value is Material {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
-    typeof item["unit"] === "string" && typeof item["quantity"] === "number" &&
-    typeof item["minimum"] === "number" && typeof item["unitCost"] === "number";
-}
-
-function isProduct(value: unknown): value is Product {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
-    typeof item["batchYield"] === "number" && typeof item["producedUnits"] === "number" &&
-    typeof item["createdAt"] === "string" && Array.isArray(item["recipe"]) &&
-    item["recipe"].every((entry) => entry != null && typeof entry === "object" &&
-      typeof (entry as Record<string, unknown>)["materialId"] === "string" &&
-      typeof (entry as Record<string, unknown>)["quantity"] === "number");
-}
-
-function isSale(value: unknown): value is Sale {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["productId"] === "string" &&
-    typeof item["quantity"] === "number" && typeof item["unitPrice"] === "number" &&
-    typeof item["unitCost"] === "number" && typeof item["soldAt"] === "string";
-}
-
-function isExpense(value: unknown): value is Expense {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["description"] === "string" &&
-    typeof item["category"] === "string" && typeof item["amount"] === "number" &&
-    typeof item["spentAt"] === "string";
-}
-
-function readArray<T>(key: string, validate: (value: unknown) => value is T): T[] {
-  const saved = localStorage.getItem(key);
-  if (!saved) return [];
-  const parsed: unknown = JSON.parse(saved);
-  return Array.isArray(parsed) ? parsed.filter(validate) : [];
-}
-
-function readPrices(): Record<string, number> {
-  const saved = localStorage.getItem(PRICES_KEY);
-  if (!saved) return {};
-  const parsed: unknown = JSON.parse(saved);
-  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-  const prices: Record<string, number> = {};
-  for (const [id, value] of Object.entries(parsed)) {
-    if (typeof value === "number" && Number.isFinite(value) && value >= 0) prices[id] = value;
-  }
-  return prices;
-}
-
 export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [prices, setPrices] = useState<Record<string, number>>({});
-  const [ready, setReady] = useState(false);
+  const { data, commit } = useBusinessStore();
+  const { products, materials, sales, expenses, prices } = data;
+  const ready = true;
   const [saleDraft, setSaleDraft] = useState<SaleDraft>({ productId: "", quantity: "1", unitPrice: "" });
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft>({ description: "", category: "Outros", amount: "", spentAt: today() });
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    try {
-      setProducts(readArray(PRODUCTS_KEY, isProduct));
-      setMaterials(readArray(MATERIALS_KEY, isMaterial));
-      setSales(readArray(SALES_KEY, isSale));
-      setExpenses(readArray(EXPENSES_KEY, isExpense));
-      setPrices(readPrices());
-    } catch {
-      setMessage("Não foi possível carregar os dados salvos neste navegador.");
-    } finally {
-      setReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(SALES_KEY, JSON.stringify(sales));
-      localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
-      localStorage.setItem(PRICES_KEY, JSON.stringify(prices));
-    } catch {
-      setMessage("Não foi possível salvar. Verifique o espaço disponível no navegador.");
-    }
-  }, [ready, sales, expenses, prices]);
 
   const materialsById = useMemo(
     () => new Map(materials.map((material) => [material.id, material])),
@@ -187,7 +102,7 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
   const sortedSales = [...sales].sort((first, second) => second.soldAt.localeCompare(first.soldAt));
   const sortedExpenses = [...expenses].sort((first, second) => second.spentAt.localeCompare(first.spentAt));
 
-  function registerSale(event: FormEvent<HTMLFormElement>) {
+  async function registerSale(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const product = productsById.get(saleDraft.productId);
     const quantity = Number(saleDraft.quantity);
@@ -209,12 +124,12 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
       unitCost: productUnitCost(product),
       soldAt: new Date().toISOString(),
     };
-    setSales((current) => [sale, ...current]);
+    if (!await commit({ ...data, sales: [sale, ...sales] })) return;
     setSaleDraft({ productId: "", quantity: "1", unitPrice: "" });
     setMessage(`Venda de ${quantity} unidade(s) de ${product.name} registrada.`);
   }
 
-  function registerExpense(event: FormEvent<HTMLFormElement>) {
+  async function registerExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const amount = Number(expenseDraft.amount);
     if (!expenseDraft.description.trim() || !Number.isFinite(amount) || amount <= 0 || !expenseDraft.spentAt) {
@@ -228,14 +143,14 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
       amount,
       spentAt: expenseDraft.spentAt,
     };
-    setExpenses((current) => [expense, ...current]);
+    if (!await commit({ ...data, expenses: [expense, ...expenses] })) return;
     setExpenseDraft({ description: "", category: "Outros", amount: "", spentAt: today() });
     setMessage("Despesa registrada.");
   }
 
-  function updatePrice(productId: string, value: string) {
+  async function updatePrice(productId: string, value: string) {
     const price = Number(value);
-    setPrices((current) => ({ ...current, [productId]: Number.isFinite(price) && price >= 0 ? price : 0 }));
+    if (Number.isFinite(price) && price >= 0) await commit({ ...data, prices: { ...prices, [productId]: price } });
   }
 
   return (
@@ -294,7 +209,7 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
                   </label>
                   <div className="flex items-end text-xs leading-5 text-[#897d72]">
                     {saleDraft.productId && productsById.has(saleDraft.productId)
-                      ? `Disponível para venda: ${Math.max(productsById.get(saleDraft.productId)!.producedUnits - (soldByProduct.get(saleDraft.productId) ?? 0), 0)} unidade(s).`
+                      ? `Disponível para venda: ${Math.max((productsById.get(saleDraft.productId)?.producedUnits ?? 0) - (soldByProduct.get(saleDraft.productId) ?? 0), 0)} unidade(s).`
                       : "A venda só pode usar unidades já registradas em produção."}
                   </div>
                 </div>
@@ -340,7 +255,7 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
                       const price = priceFor(product);
                       const profit = price - cost;
                       const margin = price > 0 ? (profit / price) * 100 : 0;
-                      return <tr key={product.id}><td className="px-4 py-3.5 font-medium text-[#4a3c33]">{product.name}</td><td className="px-4 py-3.5 text-[#786c62]">{formatCurrency(cost)}</td><td className="px-4 py-3.5"><label className="sr-only" htmlFor={`price-${product.id}`}>Preço de venda de {product.name}</label><div className="flex max-w-40 items-center rounded-md border border-[#e5dcd2] bg-white px-2"><span className="text-xs text-[#897d72]">R$</span><input id={`price-${product.id}`} type="number" min="0" step="0.01" value={prices[product.id] ?? Number((cost * 2.5).toFixed(2))} onChange={(event) => updatePrice(product.id, event.target.value)} className="w-full border-0 bg-transparent px-2 py-2 text-sm text-[#41352f] outline-none" /></div></td><td className={profit >= 0 ? "px-4 py-3.5 font-medium text-[#5f7257]" : "px-4 py-3.5 font-medium text-[#a05d42]"}>{formatCurrency(profit)}</td><td className="px-4 py-3.5 text-[#786c62]">{price > 0 ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(margin)}%` : "—"}</td></tr>;
+                      return <tr key={product.id}><td className="px-4 py-3.5 font-medium text-[#4a3c33]">{product.name}</td><td className="px-4 py-3.5 text-[#786c62]">{formatCurrency(cost)}</td><td className="px-4 py-3.5"><label className="sr-only" htmlFor={`price-${product.id}`}>Preço de venda de {product.name}</label><div className="flex max-w-40 items-center rounded-md border border-[#e5dcd2] bg-white px-2"><span className="text-xs text-[#897d72]">R$</span><input id={`price-${product.id}`} type="number" min="0" step="0.01" key={`${product.id}-${prices[product.id]}`} defaultValue={prices[product.id] ?? Number((cost * 2.5).toFixed(2))} onBlur={(event) => void updatePrice(product.id, event.target.value)} className="w-full border-0 bg-transparent px-2 py-2 text-sm text-[#41352f] outline-none" /></div></td><td className={profit >= 0 ? "px-4 py-3.5 font-medium text-[#5f7257]" : "px-4 py-3.5 font-medium text-[#a05d42]"}>{formatCurrency(profit)}</td><td className="px-4 py-3.5 text-[#786c62]">{price > 0 ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(margin)}%` : "—"}</td></tr>;
                     })}
                   </tbody>
                 </table>
@@ -382,7 +297,7 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
         </>
       )}
 
-      <p className="text-center text-[11px] text-[#a19488]">O resultado apresentado considera as vendas e despesas registradas neste navegador. O custo da venda fica salvo no momento do lançamento.</p>
+      <p className="text-center text-[11px] text-[#a19488]">O resultado apresentado considera as vendas e despesas registradas na sua conta. O custo da venda fica salvo no momento do lançamento.</p>
     </section>
   );
 }

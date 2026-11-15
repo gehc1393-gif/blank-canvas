@@ -10,6 +10,10 @@ export const Route = createFileRoute("/login")({
     meta: [
       { title: "Entrar | Ana Bolachas Artesanais" },
       { name: "description", content: "Acesse o painel de gestão da Ana Bolachas Artesanais." },
+      { property: "og:title", content: "Entrar | Ana Bolachas Artesanais" },
+      { property: "og:description", content: "Acesse sua conta e seus registros da Ana Bolachas Artesanais." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: LoginPage,

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ClipboardList, Cookie, Factory, Plus, Trash2 } from "lucide-react";
+
+import { useBusinessStore } from "@/lib/business-store";
 
 type Material = {
   id: string;
@@ -42,11 +44,6 @@ type ProductDraft = {
   ingredientQuantity: string;
 };
 
-const MATERIALS_KEY = "ana-bolachas-materias-primas-v1";
-const MOVEMENTS_KEY = "ana-bolachas-movimentacoes-estoque-v1";
-const PRODUCTS_KEY = "ana-bolachas-produtos-v1";
-const PRODUCTION_KEY = "ana-bolachas-producoes-v1";
-
 const emptyDraft: ProductDraft = {
   name: "",
   batchYield: "12",
@@ -58,42 +55,6 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function isMaterial(value: unknown): value is Material {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
-    typeof item["unit"] === "string" && typeof item["quantity"] === "number" &&
-    typeof item["minimum"] === "number" && typeof item["unitCost"] === "number";
-}
-
-function isProduct(value: unknown): value is Product {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
-    typeof item["batchYield"] === "number" && typeof item["producedUnits"] === "number" &&
-    typeof item["createdAt"] === "string" && Array.isArray(item["recipe"]) &&
-    item["recipe"].every((entry) => entry != null && typeof entry === "object" &&
-      typeof (entry as Record<string, unknown>)["materialId"] === "string" &&
-      typeof (entry as Record<string, unknown>)["quantity"] === "number");
-}
-
-function isMovement(value: unknown): value is Movement {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["materialId"] === "string" &&
-    (item["kind"] === "entrada" || item["kind"] === "saida") &&
-    typeof item["quantity"] === "number" && typeof item["note"] === "string" &&
-    typeof item["createdAt"] === "string";
-}
-
-function isProduction(value: unknown): value is Production {
-  if (value == null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item["id"] === "string" && typeof item["productId"] === "string" &&
-    typeof item["batches"] === "number" && typeof item["units"] === "number" &&
-    typeof item["createdAt"] === "string";
-}
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
@@ -102,46 +63,16 @@ function formatQuantity(value: number, unit: string) {
   return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value)} ${unit}`;
 }
 
-function readArray<T>(key: string, validate: (value: unknown) => value is T): T[] {
-  const saved = localStorage.getItem(key);
-  if (!saved) return [];
-  const parsed: unknown = JSON.parse(saved);
-  return Array.isArray(parsed) ? parsed.filter(validate) : [];
-}
-
 export function ProductManager() {
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productions, setProductions] = useState<Production[]>([]);
-  const [ready, setReady] = useState(false);
+  const { data, commit } = useBusinessStore();
+  const { materials, products, productions } = data;
+  const ready = true;
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [recipe, setRecipe] = useState<RecipeItem[]>([]);
   const [productionProductId, setProductionProductId] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState("1");
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    try {
-      setMaterials(readArray(MATERIALS_KEY, isMaterial));
-      setProducts(readArray(PRODUCTS_KEY, isProduct));
-      setProductions(readArray(PRODUCTION_KEY, isProduction));
-    } catch {
-      setMessage("Não foi possível carregar os dados salvos neste navegador.");
-    } finally {
-      setReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-      localStorage.setItem(PRODUCTION_KEY, JSON.stringify(productions));
-    } catch {
-      setMessage("Não foi possível salvar. Verifique o espaço disponível no navegador.");
-    }
-  }, [ready, products, productions]);
 
   const materialsById = useMemo(
     () => new Map(materials.map((material) => [material.id, material])),
@@ -163,7 +94,7 @@ export function ProductManager() {
     setMessage("");
   }
 
-  function createProduct(event: FormEvent<HTMLFormElement>) {
+  async function createProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const batchYield = Number(draft.batchYield);
     if (!draft.name.trim() || !Number.isFinite(batchYield) || batchYield <= 0 || recipe.length === 0) {
@@ -182,14 +113,14 @@ export function ProductManager() {
       producedUnits: 0,
       createdAt: new Date().toISOString(),
     };
-    setProducts((current) => [...current, product]);
+    if (!await commit({ ...data, products: [...products, product] })) return;
     setDraft(emptyDraft);
     setRecipe([]);
     setShowForm(false);
     setMessage(`${product.name} foi cadastrado com sua receita.`);
   }
 
-  function registerProduction(event: FormEvent<HTMLFormElement>) {
+  async function registerProduction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const product = products.find((item) => item.id === productionProductId);
     const batches = Number(batchCount);
@@ -199,8 +130,8 @@ export function ProductManager() {
     }
 
     try {
-      const storedMaterials = readArray(MATERIALS_KEY, isMaterial);
-      const storedMovements = readArray(MOVEMENTS_KEY, isMovement);
+      const storedMaterials = materials;
+      const storedMovements = data.movements;
       const availableById = new Map(storedMaterials.map((material) => [material.id, material]));
       const needs = new Map<string, number>();
       for (const item of product.recipe) {
@@ -242,25 +173,7 @@ export function ProductManager() {
         ? { ...item, producedUnits: item.producedUnits + production.units }
         : item);
       const nextMovements = [...newMovements, ...storedMovements];
-      const previousValues = [MATERIALS_KEY, MOVEMENTS_KEY, PRODUCTS_KEY, PRODUCTION_KEY]
-        .map((key) => [key, localStorage.getItem(key)] as const);
-
-      try {
-        localStorage.setItem(MATERIALS_KEY, JSON.stringify(updatedMaterials));
-        localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(nextMovements));
-        localStorage.setItem(PRODUCTS_KEY, JSON.stringify(updatedProducts));
-        localStorage.setItem(PRODUCTION_KEY, JSON.stringify([production, ...productions]));
-      } catch (error) {
-        for (const [key, value] of previousValues) {
-          if (value === null) localStorage.removeItem(key);
-          else localStorage.setItem(key, value);
-        }
-        throw error;
-      }
-
-      setMaterials(updatedMaterials);
-      setProducts(updatedProducts);
-      setProductions((current) => [production, ...current]);
+      if (!await commit({ ...data, materials: updatedMaterials, movements: nextMovements, products: updatedProducts, productions: [production, ...productions] })) return;
       setProductionProductId(null);
       setBatchCount("1");
       setMessage(`Produção registrada: ${production.units} unidades de ${product.name}. O estoque de ingredientes foi atualizado.`);
@@ -445,7 +358,7 @@ export function ProductManager() {
         ) : <p className="px-4 py-5 text-sm text-[#897d72]">As produções registradas aparecerão aqui.</p>}
       </div>
 
-      <p className="text-center text-[11px] text-[#a19488]">A produção registra as baixas no mesmo estoque salvo neste navegador.</p>
+      <p className="text-center text-[11px] text-[#a19488]">A produção e as baixas de estoque ficam salvas na sua conta.</p>
     </section>
   );
 }
