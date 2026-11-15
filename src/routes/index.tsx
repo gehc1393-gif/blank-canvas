@@ -8,6 +8,16 @@ import { SalesFinanceManager } from "@/components/sales-finance-manager";
 // The home route ships no og:image, so serve-time hosting can inject the
 // project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Ana Bolachas Artesanais | Painel da produção" },
+      { name: "description", content: "Acompanhe estoque, receitas, produção, vendas e finanças da Ana Bolachas Artesanais." },
+      { property: "og:title", content: "Ana Bolachas Artesanais | Painel da produção" },
+      { property: "og:description", content: "Acompanhe estoque, receitas, produção, vendas e finanças da Ana Bolachas Artesanais." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
