@@ -68,36 +68,36 @@ function formatDate(value: string) {
 function isMaterial(value: unknown): value is Material {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.name === "string" &&
-    typeof item.unit === "string" && typeof item.quantity === "number" &&
-    typeof item.minimum === "number" && typeof item.unitCost === "number";
+  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
+    typeof item["unit"] === "string" && typeof item["quantity"] === "number" &&
+    typeof item["minimum"] === "number" && typeof item["unitCost"] === "number";
 }
 
 function isProduct(value: unknown): value is Product {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.name === "string" &&
-    typeof item.batchYield === "number" && typeof item.producedUnits === "number" &&
-    typeof item.createdAt === "string" && Array.isArray(item.recipe) &&
-    item.recipe.every((entry) => entry != null && typeof entry === "object" &&
-      typeof (entry as Record<string, unknown>).materialId === "string" &&
-      typeof (entry as Record<string, unknown>).quantity === "number");
+  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
+    typeof item["batchYield"] === "number" && typeof item["producedUnits"] === "number" &&
+    typeof item["createdAt"] === "string" && Array.isArray(item["recipe"]) &&
+    item["recipe"].every((entry) => entry != null && typeof entry === "object" &&
+      typeof (entry as Record<string, unknown>)["materialId"] === "string" &&
+      typeof (entry as Record<string, unknown>)["quantity"] === "number");
 }
 
 function isSale(value: unknown): value is Sale {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.productId === "string" &&
-    typeof item.quantity === "number" && typeof item.unitPrice === "number" &&
-    typeof item.unitCost === "number" && typeof item.soldAt === "string";
+  return typeof item["id"] === "string" && typeof item["productId"] === "string" &&
+    typeof item["quantity"] === "number" && typeof item["unitPrice"] === "number" &&
+    typeof item["unitCost"] === "number" && typeof item["soldAt"] === "string";
 }
 
 function isExpense(value: unknown): value is Expense {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.description === "string" &&
-    typeof item.category === "string" && typeof item.amount === "number" &&
-    typeof item.spentAt === "string";
+  return typeof item["id"] === "string" && typeof item["description"] === "string" &&
+    typeof item["category"] === "string" && typeof item["amount"] === "number" &&
+    typeof item["spentAt"] === "string";
 }
 
 function readArray<T>(key: string, validate: (value: unknown) => value is T): T[] {

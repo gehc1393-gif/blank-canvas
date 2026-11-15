@@ -61,37 +61,37 @@ function makeId() {
 function isMaterial(value: unknown): value is Material {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.name === "string" &&
-    typeof item.unit === "string" && typeof item.quantity === "number" &&
-    typeof item.minimum === "number" && typeof item.unitCost === "number";
+  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
+    typeof item["unit"] === "string" && typeof item["quantity"] === "number" &&
+    typeof item["minimum"] === "number" && typeof item["unitCost"] === "number";
 }
 
 function isProduct(value: unknown): value is Product {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.name === "string" &&
-    typeof item.batchYield === "number" && typeof item.producedUnits === "number" &&
-    typeof item.createdAt === "string" && Array.isArray(item.recipe) &&
-    item.recipe.every((entry) => entry != null && typeof entry === "object" &&
-      typeof (entry as Record<string, unknown>).materialId === "string" &&
-      typeof (entry as Record<string, unknown>).quantity === "number");
+  return typeof item["id"] === "string" && typeof item["name"] === "string" &&
+    typeof item["batchYield"] === "number" && typeof item["producedUnits"] === "number" &&
+    typeof item["createdAt"] === "string" && Array.isArray(item["recipe"]) &&
+    item["recipe"].every((entry) => entry != null && typeof entry === "object" &&
+      typeof (entry as Record<string, unknown>)["materialId"] === "string" &&
+      typeof (entry as Record<string, unknown>)["quantity"] === "number");
 }
 
 function isMovement(value: unknown): value is Movement {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.materialId === "string" &&
-    (item.kind === "entrada" || item.kind === "saida") &&
-    typeof item.quantity === "number" && typeof item.note === "string" &&
-    typeof item.createdAt === "string";
+  return typeof item["id"] === "string" && typeof item["materialId"] === "string" &&
+    (item["kind"] === "entrada" || item["kind"] === "saida") &&
+    typeof item["quantity"] === "number" && typeof item["note"] === "string" &&
+    typeof item["createdAt"] === "string";
 }
 
 function isProduction(value: unknown): value is Production {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && typeof item.productId === "string" &&
-    typeof item.batches === "number" && typeof item.units === "number" &&
-    typeof item.createdAt === "string";
+  return typeof item["id"] === "string" && typeof item["productId"] === "string" &&
+    typeof item["batches"] === "number" && typeof item["units"] === "number" &&
+    typeof item["createdAt"] === "string";
 }
 
 function formatCurrency(value: number) {
