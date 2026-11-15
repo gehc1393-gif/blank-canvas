@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { Cookie, Package, ShoppingBag, Wallet, LayoutDashboard, ArrowRight, ClipboardList } from "lucide-react";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { Cookie, Package, ShoppingBag, Wallet, LayoutDashboard, ArrowRight, ClipboardList, LogOut } from "lucide-react";
 import { InventoryManager } from "@/components/inventory-manager";
 import { ProductManager } from "@/components/product-manager";
 import { SalesFinanceManager } from "@/components/sales-finance-manager";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthSession } from "@/lib/use-auth-session";
 
 // The home route ships no og:image, so serve-time hosting can inject the
 // project's social preview (explicit og:image or latest screenshot).
@@ -55,7 +57,24 @@ const areaDetails: Record<Area, { title: string; description: string }> = {
 };
 
 function Index() {
+  const { session, loading } = useAuthSession();
+
+  if (loading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#fbf8f3] px-5">
+        <p className="text-sm text-[#897d72]">Verificando sua sessão…</p>
+      </main>
+    );
+  }
+
+  if (!session) return <Navigate to="/login" />;
+
+  return <Dashboard email={session.user.email ?? ""} />;
+}
+
+function Dashboard({ email }: { email: string }) {
   const [activeArea, setActiveArea] = useState<Area>("visao-geral");
+  const [authError, setAuthError] = useState("");
   const currentArea = areaDetails[activeArea];
 
   return (
@@ -96,10 +115,24 @@ function Index() {
       <main className="main-area" id="inicio">
         <header className="topbar">
           <div className="breadcrumb">Ana Bolachas <span>/</span> {currentArea.title}</div>
-          <div className="topbar-tag"><span className="status-dot" /> Painel da produção</div>
+          <div className="flex items-center gap-3">
+            <div className="topbar-tag"><span className="status-dot" /> Painel da produção</div>
+            {email && <span className="hidden text-xs text-[#897d72] sm:inline">{email}</span>}
+            <button
+              type="button"
+              onClick={async () => {
+                const { error } = await supabase.auth.signOut();
+                if (error) setAuthError("Não foi possível sair da conta. Tente novamente.");
+              }}
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#e5dcd2] px-3 text-xs font-semibold text-[#786c62] hover:bg-[#faf6f0]"
+            >
+              <LogOut size={15} /> Sair
+            </button>
+          </div>
         </header>
 
         <div className="page-content">
+          {authError && <p role="alert" className="mb-4 rounded-lg border border-[#efd9d0] bg-[#fcf1ed] px-4 py-3 text-sm text-[#96543f]">{authError}</p>}
           <section className="welcome-block">
             <div>
               <span className="eyebrow">BEM-VINDA AO SEU PAINEL</span>
