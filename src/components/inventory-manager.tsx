@@ -55,12 +55,12 @@ function isMaterial(value: unknown): value is Material {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
   return (
-    typeof item.id === "string" &&
-    typeof item.name === "string" &&
-    typeof item.unit === "string" &&
-    typeof item.quantity === "number" &&
-    typeof item.minimum === "number" &&
-    typeof item.unitCost === "number"
+    typeof item["id"] === "string" &&
+    typeof item["name"] === "string" &&
+    typeof item["unit"] === "string" &&
+    typeof item["quantity"] === "number" &&
+    typeof item["minimum"] === "number" &&
+    typeof item["unitCost"] === "number"
   );
 }
 
@@ -68,12 +68,12 @@ function isMovement(value: unknown): value is Movement {
   if (value == null || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
   return (
-    typeof item.id === "string" &&
-    typeof item.materialId === "string" &&
-    (item.kind === "entrada" || item.kind === "saida") &&
-    typeof item.quantity === "number" &&
-    typeof item.note === "string" &&
-    typeof item.createdAt === "string"
+    typeof item["id"] === "string" &&
+    typeof item["materialId"] === "string" &&
+    (item["kind"] === "entrada" || item["kind"] === "saida") &&
+    typeof item["quantity"] === "number" &&
+    typeof item["note"] === "string" &&
+    typeof item["createdAt"] === "string"
   );
 }
 
