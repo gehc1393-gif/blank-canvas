@@ -65,7 +65,7 @@ function formatQuantity(value: number, unit: string) {
 
 export function ProductManager() {
   const { data, commit } = useBusinessStore();
-  const { materials, products, productions } = data;
+  const { materials, products, productions, prices } = data;
   const ready = true;
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
@@ -82,6 +82,17 @@ export function ProductManager() {
     const material = materialsById.get(item.materialId);
     return total + (material ? material.unitCost * item.quantity : 0);
   }, 0);
+
+  async function updatePrice(product: Product, value: string) {
+    const price = Number(value);
+    if (!Number.isFinite(price) || price < 0) {
+      setMessage("Informe um preço válido, igual ou maior que zero.");
+      return;
+    }
+    if (await commit({ ...data, prices: { ...prices, [product.id]: price } })) {
+      setMessage(`Preço de ${product.name} atualizado.`);
+    }
+  }
 
   function addIngredient() {
     const quantity = Number(draft.ingredientQuantity);
@@ -321,6 +332,19 @@ export function ProductManager() {
                 </div>
                 <button type="button" onClick={() => { setProductionProductId(product.id); setShowForm(false); setBatchCount("1"); setMessage(""); }} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#815a40] px-3 text-xs font-semibold text-white hover:bg-[#69462f]"><Factory size={15} /> Produzir</button>
               </div>
+              <label className="mt-4 block max-w-xs text-xs font-medium text-[#786c62]">
+                Preço de venda por unidade (R$)
+                <input
+                  aria-label={`Preço de venda de ${product.name}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  key={`${product.id}-${prices[product.id]}`}
+                  defaultValue={prices[product.id] ?? Number(((totalCost / product.batchYield) * 2.5).toFixed(2))}
+                  onBlur={(event) => void updatePrice(product, event.target.value)}
+                  className="mt-1.5 w-full rounded-md border border-[#e5dcd2] bg-white px-3 py-2 text-sm text-[#41352f] outline-none focus:border-[#b58b69]"
+                />
+              </label>
               <div className="mt-4 space-y-2 border-t border-[#f0e9e1] pt-4">
                 <div className="flex justify-between gap-3 text-xs"><span className="text-[#897d72]">Custo estimado da receita</span><strong className="text-[#4a3c33]">{formatCurrency(totalCost)}</strong></div>
                 <div className="flex justify-between gap-3 text-xs"><span className="text-[#897d72]">Custo estimado por unidade</span><strong className="text-[#4a3c33]">{formatCurrency(totalCost / product.batchYield)}</strong></div>
