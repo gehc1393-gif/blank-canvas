@@ -65,7 +65,7 @@ function formatQuantity(value: number, unit: string) {
 
 export function ProductManager() {
   const { data, commit } = useBusinessStore();
-  const { materials, products, productions, prices } = data;
+  const { materials, products, productions, prices, sales } = data;
   const ready = true;
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
@@ -91,6 +91,25 @@ export function ProductManager() {
     }
     if (await commit({ ...data, prices: { ...prices, [product.id]: price } })) {
       setMessage(`Preço de ${product.name} atualizado.`);
+    }
+  }
+
+  async function deleteProduct(product: Product) {
+    const confirmed = window.confirm(
+      `Excluir "${product.name}"? Isso removerá também as produções, vendas e preços associados a este produto.`,
+    );
+    if (!confirmed) return;
+    const { [product.id]: _removedPrice, ...nextPrices } = prices;
+    if (
+      await commit({
+        ...data,
+        products: products.filter((item) => item.id !== product.id),
+        productions: productions.filter((item) => item.productId !== product.id),
+        sales: sales.filter((item) => item.productId !== product.id),
+        prices: nextPrices,
+      })
+    ) {
+      setMessage(`${product.name} foi excluído.`);
     }
   }
 
@@ -330,7 +349,7 @@ export function ProductManager() {
                   <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f6e9dd] text-[#9a6844]"><Cookie size={20} /></span>
                   <div><h3 className="font-serif text-lg font-medium text-[#4a3c33]">{product.name}</h3><p className="mt-1 text-xs text-[#897d72]">Rende {product.batchYield} unidades por receita</p></div>
                 </div>
-                <button type="button" onClick={() => { setProductionProductId(product.id); setShowForm(false); setBatchCount("1"); setMessage(""); }} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#815a40] px-3 text-xs font-semibold text-white hover:bg-[#69462f]"><Factory size={15} /> Produzir</button>
+                <div className="flex gap-2"><button type="button" onClick={() => void deleteProduct(product)} aria-label={`Excluir ${product.name}`} title="Excluir produto" className="grid h-9 w-9 place-items-center rounded-lg border border-[#e5dcd2] text-[#a05d42] hover:bg-[#f8eee6]"><Trash2 size={15} /></button><button type="button" onClick={() => { setProductionProductId(product.id); setShowForm(false); setBatchCount("1"); setMessage(""); }} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#815a40] px-3 text-xs font-semibold text-white hover:bg-[#69462f]"><Factory size={15} /> Produzir</button></div>
               </div>
               <label className="mt-4 block max-w-xs text-xs font-medium text-[#786c62]">
                 Preço de venda por unidade (R$)
