@@ -123,7 +123,8 @@ export function InventoryManager() {
     event.preventDefault();
     const material = materials.find((item) => item.id === adjustingId);
     const quantity = Number(movementDraft.quantity);
-    const updatedCost = movementDraft.unitCost.trim() === "" ? undefined : Number(movementDraft.unitCost);
+    const normalizedCostString = movementDraft.unitCost.replace(",", ".");
+    const updatedCost = normalizedCostString.trim() === "" ? undefined : Number(normalizedCostString);
     if (!material || !Number.isFinite(quantity) || quantity <= 0) {
       setMessage("Informe uma quantidade maior que zero.");
       return;
@@ -248,7 +249,7 @@ export function InventoryManager() {
               {movementDraft.kind === "entrada" && (
                 <label className="text-xs font-medium text-[#786c62]">
                   Novo custo por unidade (R$), opcional
-                  <input type="number" min="0" step="0.01" value={movementDraft.unitCost} onChange={(event) => setMovementDraft({ ...movementDraft, unitCost: event.target.value })} placeholder={formatCurrency(material.unitCost)} className="mt-1.5 w-full rounded-md border border-[#e5dcd2] bg-white px-3 py-2.5 text-sm text-[#41352f] outline-none focus:border-[#b58b69]" />
+                  <input type="text" inputMode="decimal" value={movementDraft.unitCost} onChange={(event) => setMovementDraft({ ...movementDraft, unitCost: event.target.value })} placeholder="Ex.: 12.50" className="mt-1.5 w-full rounded-md border border-[#e5dcd2] bg-white px-3 py-2.5 text-sm text-[#41352f] outline-none focus:border-[#b58b69]" />
                 </label>
               )}
               <label className="text-xs font-medium text-[#786c62]">
