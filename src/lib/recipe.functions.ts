@@ -43,7 +43,7 @@ export const listRecipeMaterials = createServerFn({ method: "POST" })
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await context.supabase
         .from("materials")
-        .select("id,name,unit")
+        .select("id,name,unit,unitCost::text")
         .eq("user_id", context.userId)
         .order("name")
         .order("id")

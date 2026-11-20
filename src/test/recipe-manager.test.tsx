@@ -25,8 +25,8 @@ it("validates yield, then creates, filters, views, edits and deactivates a recip
   let records: Recipe[] = [];
   vi.mocked(listRecipes).mockImplementation(async () => records);
   vi.mocked(listRecipeMaterials).mockResolvedValue([
-    { id: "farinha", name: "Farinha", unit: "kg" },
-    { id: "leite", name: "Leite", unit: "L" },
+    { id: "farinha", name: "Farinha", unit: "kg", unitCost: "8" },
+    { id: "leite", name: "Leite", unit: "L", unitCost: "10" },
   ]);
   vi.mocked(changeRecipe).mockImplementation(async (options) => {
     const action = (options as { data: RecipeAction }).data;
@@ -78,6 +78,12 @@ it("validates yield, then creates, filters, views, edits and deactivates a recip
   fireEvent.change(form.getByLabelText("Quantidade utilizada 2"), { target: { value: "0.1" } });
   fireEvent.change(form.getByLabelText("Unidade de medida 2"), { target: { value: "ml" } });
   expect(form.getByLabelText("Quantidade utilizada 2")).toHaveValue(100);
+  expect(form.getByText("R$ 8,00 / kg")).toBeInTheDocument();
+  expect(form.getByText("R$ 3,00")).toBeInTheDocument();
+  expect(form.getByText("R$ 0,25")).toBeInTheDocument();
+  fireEvent.change(yieldField, { target: { value: "24" } });
+  expect(form.getByText("R$ 0,13")).toBeInTheDocument();
+  fireEvent.change(yieldField, { target: { value: "12" } });
   fireEvent.click(form.getByRole("button", { name: "Salvar receita" }));
   await screen.findByRole("rowheader", { name: "Ficha de teste" });
   expect(screen.getByText("F-01")).toBeInTheDocument();
@@ -89,8 +95,8 @@ it("validates yield, then creates, filters, views, edits and deactivates a recip
   });
   fireEvent.click(screen.getByRole("button", { name: "Visualizar Ficha de teste" }));
   expect(within(screen.getByRole("dialog")).getByText("12")).toBeInTheDocument();
-  expect(await screen.findByText("Farinha — 250 g")).toBeInTheDocument();
-  expect(screen.getByText("Leite — 100 ml")).toBeInTheDocument();
+  expect(await screen.findByRole("rowheader", { name: "Farinha" })).toBeInTheDocument();
+  expect(screen.getByText("100 ml")).toBeInTheDocument();
   fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: "Editar Ficha de teste" }));
   fireEvent.change(screen.getByLabelText("Rendimento (unidades)"), { target: { value: "18" } });

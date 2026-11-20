@@ -13,6 +13,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  calculateIngredientCost,
+  formatIngredientCost,
+  summarizeIngredientCosts,
+} from "@/lib/recipe-cost";
+import {
   changeRecipe,
   listRecipeMaterials,
   listRecipes,
@@ -25,6 +30,7 @@ import {
   recipeSchema,
   type Recipe,
   type RecipeIngredient,
+  type RecipeMaterial,
 } from "@/lib/recipe-schema";
 
 const fields = [
@@ -59,6 +65,7 @@ export function RecipeManager({ userId }: { userId: string }) {
   const [category, setCategory] = useState("");
   const [panel, setPanel] = useState<Panel | null>(null);
   const [ingredients, setIngredients] = useState<IngredientDraft[]>([]);
+  const [yieldDraft, setYieldDraft] = useState("");
   const materialsQuery = useQuery({
     queryKey: ["recipe-materials", userId],
     queryFn: () => listMaterials(),
@@ -83,9 +90,16 @@ export function RecipeManager({ userId }: { userId: string }) {
   const deactivating = panel?.mode === "deactivate";
   const materials = materialsQuery.data ?? [];
   const materialsById = new Map(materials.map((material) => [material.id, material]));
+  const shownIngredients = view ? (current?.ingredients ?? []) : ingredients;
+  const yieldUnits = view ? (current?.yield_units ?? 0) : Number(yieldDraft);
+  const costs = shownIngredients.map((item) =>
+    calculateIngredientCost(item.quantity, item.unit, materialsById.get(item.material_id)),
+  );
+  const costSummary = summarizeIngredientCosts(costs, yieldUnits);
 
   function openPanel(next: Panel | null) {
     setError("");
+    setYieldDraft(next && "recipe" in next ? String(next.recipe.yield_units) : "");
     setIngredients(
       next && "recipe" in next
         ? next.recipe.ingredients.map((item) => ({
@@ -295,7 +309,7 @@ export function RecipeManager({ userId }: { userId: string }) {
         }}
       >
         {panel && (
-          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>
                 {panel.mode === "create"
@@ -336,22 +350,53 @@ export function RecipeManager({ userId }: { userId: string }) {
                     {current.ingredients.length === 0 ? (
                       "Nenhum ingrediente cadastrado."
                     ) : (
-                      <ul className="mt-2 space-y-1">
-                        {current.ingredients.map((item) => (
-                          <li key={item.material_id}>
-                            {materialsById.get(item.material_id)?.name ??
-                              (materialsQuery.isPending
-                                ? "Carregando nome…"
-                                : "Ingrediente indisponível")}{" "}
-                            —{" "}
-                            {item.quantity.toLocaleString("pt-BR", {
-                              maximumSignificantDigits: 17,
-                            })}{" "}
-                            {item.unit}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="mt-2 overflow-x-auto rounded-md border">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="border-b">
+                              {[
+                                "Ingrediente",
+                                "Quantidade utilizada",
+                                "Preço de referência",
+                                "Custo utilizado",
+                              ].map((label) => (
+                                <th key={label} scope="col" className="p-2">
+                                  {label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {current.ingredients.map((item, index) => {
+                              const material = materialsById.get(item.material_id);
+                              return (
+                                <tr key={item.material_id} className="border-b last:border-0">
+                                  <th scope="row" className="p-2 font-medium">
+                                    {material?.name ??
+                                      (materialsQuery.isPending
+                                        ? "Carregando nome…"
+                                        : "Ingrediente indisponível")}
+                                  </th>
+                                  <td className="p-2 whitespace-nowrap">
+                                    {item.quantity.toLocaleString("pt-BR", {
+                                      maximumSignificantDigits: 17,
+                                    })}{" "}
+                                    {item.unit}
+                                  </td>
+                                  <td className="p-2 whitespace-nowrap">
+                                    {referencePrice(material)}
+                                  </td>
+                                  <td className="p-2 whitespace-nowrap">
+                                    {formatIngredientCost(costs[index] ?? null)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
+                    <IngredientCostSummary summary={costSummary} yieldUnits={yieldUnits} />
                   </dd>
                 </div>
               </dl>
@@ -378,7 +423,17 @@ export function RecipeManager({ userId }: { userId: string }) {
                             min={field.min}
                             step={field.step}
                             required={"required" in field}
-                            defaultValue={current?.[field.name] ?? ""}
+                            value={field.name === "yield_units" ? yieldDraft : undefined}
+                            defaultValue={
+                              field.name === "yield_units"
+                                ? undefined
+                                : (current?.[field.name] ?? "")
+                            }
+                            onChange={
+                              field.name === "yield_units"
+                                ? (event) => setYieldDraft(event.target.value)
+                                : undefined
+                            }
                           />
                         ) : (
                           <Input
@@ -430,13 +485,15 @@ export function RecipeManager({ userId }: { userId: string }) {
                     )}
                     {ingredients.length > 0 && (
                       <div className="overflow-x-auto rounded-md border">
-                        <table className="w-full min-w-[510px] text-left text-sm">
+                        <table className="w-full min-w-[720px] text-left text-sm">
                           <thead>
                             <tr className="border-b">
                               {[
                                 "Ingrediente",
                                 "Quantidade utilizada",
                                 "Unidade de medida",
+                                "Preço de referência",
+                                "Custo utilizado",
                                 "Ações",
                               ].map((label) => (
                                 <th key={label} scope="col" className="px-2 py-2">
@@ -520,6 +577,12 @@ export function RecipeManager({ userId }: { userId: string }) {
                                       ))}
                                     </select>
                                   </td>
+                                  <td className="p-2 whitespace-nowrap">
+                                    {referencePrice(material)}
+                                  </td>
+                                  <td className="p-2 whitespace-nowrap">
+                                    {formatIngredientCost(costs[index] ?? null)}
+                                  </td>
                                   <td className="p-2">
                                     <Button
                                       type="button"
@@ -554,6 +617,7 @@ export function RecipeManager({ userId }: { userId: string }) {
                     >
                       Adicionar ingrediente
                     </Button>
+                    <IngredientCostSummary summary={costSummary} yieldUnits={yieldUnits} />
                   </fieldset>
                 )}
                 {error && (
@@ -584,5 +648,46 @@ export function RecipeManager({ userId }: { userId: string }) {
         )}
       </Dialog>
     </section>
+  );
+}
+
+function referencePrice(material: RecipeMaterial | undefined) {
+  if (!material) return "—";
+  const price = formatIngredientCost(material.unitCost);
+  return price === "—" ? price : `${price} / ${material.unit}`;
+}
+
+function IngredientCostSummary({
+  summary,
+  yieldUnits,
+}: {
+  summary: ReturnType<typeof summarizeIngredientCosts>;
+  yieldUnits: number;
+}) {
+  return (
+    <div className="mt-3 space-y-2 text-sm">
+      <dl className="grid gap-3 rounded-md border bg-muted/30 p-3 sm:grid-cols-3">
+        <div>
+          <dt>Custo total dos ingredientes</dt>
+          <dd className="font-semibold">{formatIngredientCost(summary.total)}</dd>
+        </div>
+        <div>
+          <dt>Rendimento da receita</dt>
+          <dd className="font-semibold">
+            {Number.isInteger(yieldUnits) && yieldUnits > 0 ? `${yieldUnits} un.` : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt>Custo dos ingredientes por unidade</dt>
+          <dd className="font-semibold">{formatIngredientCost(summary.perUnit)}</dd>
+        </div>
+      </dl>
+      {summary.total === null && (
+        <p>
+          Complete as quantidades e confira os preços e as unidades do estoque para calcular o
+          total.
+        </p>
+      )}
+    </div>
   );
 }
