@@ -142,6 +142,7 @@ export type Database = {
           created_at: string
           createdAt: string
           id: string
+          ingredient_cost: number | null
           productId: string
           units: number
           updated_at: string
@@ -152,6 +153,7 @@ export type Database = {
           created_at?: string
           createdAt?: string
           id: string
+          ingredient_cost?: number | null
           productId: string
           units: number
           updated_at?: string
@@ -162,6 +164,7 @@ export type Database = {
           created_at?: string
           createdAt?: string
           id?: string
+          ingredient_cost?: number | null
           productId?: string
           units?: number
           updated_at?: string
@@ -186,6 +189,8 @@ export type Database = {
           name: string
           producedUnits: number
           recipe: Json
+          recipe_sheet_id: string | null
+          units_per_presentation: number | null
           updated_at: string
           user_id: string
         }
@@ -197,6 +202,8 @@ export type Database = {
           name: string
           producedUnits?: number
           recipe?: Json
+          recipe_sheet_id?: string | null
+          units_per_presentation?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -208,10 +215,20 @@ export type Database = {
           name?: string
           producedUnits?: number
           recipe?: Json
+          recipe_sheet_id?: string | null
+          units_per_presentation?: number | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_recipe_sheet_fkey"
+            columns: ["user_id", "recipe_sheet_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_sheets"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
       }
       recipe_sheets: {
         Row: {
