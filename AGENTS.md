@@ -32,3 +32,4 @@ use the editor.
 - Business data is persisted through authenticated TanStack server functions and owner-scoped Supabase tables; never use the admin client for ordinary records.
 - The shared business provider commits complete operations through a revision-checked SQL transaction so production and sales cannot partially save or silently overwrite another device.
 - Legacy browser records require explicit account-specific import; never automatically assign unscoped records to a signed-in user.
+- Snapshot product links and finalized production costs under the account revision lock before delete/reinsert saves; this preserves omitted fields from older clients and prevents historical cost rewrites.

@@ -1,0 +1,1 @@
+CREATE INDEX products_user_recipe_sheet_idx ON public.products (user_id, recipe_sheet_id);
