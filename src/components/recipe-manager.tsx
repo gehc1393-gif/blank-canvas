@@ -12,8 +12,20 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { changeRecipe, listRecipes, type RecipeAction } from "@/lib/recipe.functions";
-import { recipeSchema, type Recipe } from "@/lib/recipe-schema";
+import {
+  changeRecipe,
+  listRecipeMaterials,
+  listRecipes,
+  type RecipeAction,
+} from "@/lib/recipe.functions";
+import {
+  compatibleUnits,
+  convertIngredientQuantity,
+  recipeIngredientsSchema,
+  recipeSchema,
+  type Recipe,
+  type RecipeIngredient,
+} from "@/lib/recipe-schema";
 
 const fields = [
   { name: "code", label: "Código", required: true, maxLength: 40 },
@@ -30,12 +42,14 @@ const fields = [
 ] as const;
 
 type Panel = { mode: "create" } | { mode: "view" | "edit" | "deactivate"; recipe: Recipe };
+type IngredientDraft = Omit<RecipeIngredient, "quantity"> & { key: string; quantity: string };
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring";
 
 export function RecipeManager({ userId }: { userId: string }) {
   const list = useServerFn(listRecipes);
   const change = useServerFn(changeRecipe);
+  const listMaterials = useServerFn(listRecipeMaterials);
   const query = useQuery({
     queryKey: ["recipe-sheets", userId],
     queryFn: () => list(),
@@ -44,6 +58,13 @@ export function RecipeManager({ userId }: { userId: string }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [panel, setPanel] = useState<Panel | null>(null);
+  const [ingredients, setIngredients] = useState<IngredientDraft[]>([]);
+  const materialsQuery = useQuery({
+    queryKey: ["recipe-materials", userId],
+    queryFn: () => listMaterials(),
+    enabled: panel !== null && panel.mode !== "deactivate",
+    retry: false,
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -60,10 +81,42 @@ export function RecipeManager({ userId }: { userId: string }) {
   const current = panel && "recipe" in panel ? panel.recipe : undefined;
   const view = panel?.mode === "view";
   const deactivating = panel?.mode === "deactivate";
+  const materials = materialsQuery.data ?? [];
+  const materialsById = new Map(materials.map((material) => [material.id, material]));
 
   function openPanel(next: Panel | null) {
     setError("");
+    setIngredients(
+      next && "recipe" in next
+        ? next.recipe.ingredients.map((item) => ({
+            ...item,
+            key: item.material_id,
+            quantity: String(item.quantity),
+          }))
+        : [],
+    );
     setPanel(next);
+  }
+
+  function updateIngredient(key: string, changes: Partial<IngredientDraft>) {
+    setIngredients((items) =>
+      items.map((item) => (item.key === key ? { ...item, ...changes } : item)),
+    );
+  }
+
+  function changeIngredientUnit(item: IngredientDraft, unit: string) {
+    const quantity = Number(item.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      updateIngredient(item.key, { unit });
+      return;
+    }
+    const converted = convertIngredientQuantity(quantity, item.unit, unit);
+    if (converted === undefined) {
+      setError("A quantidade está fora do intervalo permitido para essa conversão.");
+      return;
+    }
+    setError("");
+    updateIngredient(item.key, { unit, quantity: String(converted) });
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -95,10 +148,24 @@ export function RecipeManager({ userId }: { userId: string }) {
         setError(`Confira o campo ${field?.label ?? "Status"} e informe um valor válido.`);
         return;
       }
+      const parsedIngredients = recipeIngredientsSchema.safeParse(
+        ingredients.map(({ material_id, quantity, unit }) => ({
+          material_id,
+          quantity: Number(quantity),
+          unit,
+        })),
+      );
+      if (!parsedIngredients.success) {
+        setError(
+          "Selecione um ingrediente por linha, sem repetir, e informe quantidades maiores que zero.",
+        );
+        return;
+      }
+      const recipeFields = { ...result.data, ingredients: parsedIngredients.data };
       action =
         panel.mode === "create"
-          ? { action: "create", fields: result.data }
-          : { action: "edit", id: panel.recipe.id, fields: result.data };
+          ? { action: "create", fields: recipeFields }
+          : { action: "edit", id: panel.recipe.id, fields: recipeFields };
     }
     setBusy(true);
     setError("");
@@ -263,6 +330,30 @@ export function RecipeManager({ userId }: { userId: string }) {
                   <dt className="text-sm font-medium">Status</dt>
                   <dd className="text-sm">{current.active ? "Ativa" : "Inativa"}</dd>
                 </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-sm font-medium">Ingredientes da Receita</dt>
+                  <dd className="text-sm">
+                    {current.ingredients.length === 0 ? (
+                      "Nenhum ingrediente cadastrado."
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {current.ingredients.map((item) => (
+                          <li key={item.material_id}>
+                            {materialsById.get(item.material_id)?.name ??
+                              (materialsQuery.isPending
+                                ? "Carregando nome…"
+                                : "Ingrediente indisponível")}{" "}
+                            —{" "}
+                            {item.quantity.toLocaleString("pt-BR", {
+                              maximumSignificantDigits: 17,
+                            })}{" "}
+                            {item.unit}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </dd>
+                </div>
               </dl>
             ) : (
               <form onSubmit={submit} className="space-y-4">
@@ -310,6 +401,159 @@ export function RecipeManager({ userId }: { userId: string }) {
                         <option value="false">Inativa</option>
                       </select>
                     </label>
+                  </fieldset>
+                )}
+                {!deactivating && (
+                  <fieldset disabled={busy} className="space-y-3 border-t pt-3">
+                    <legend className="text-sm font-semibold">Ingredientes da Receita</legend>
+                    {materialsQuery.isPending && (
+                      <p role="status" className="text-sm">
+                        Carregando ingredientes do estoque…
+                      </p>
+                    )}
+                    {materialsQuery.isError && (
+                      <p role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+                        Não foi possível carregar o estoque.
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void materialsQuery.refetch()}
+                        >
+                          Tentar novamente
+                        </Button>
+                      </p>
+                    )}
+                    {materialsQuery.isSuccess && !materials.length && (
+                      <p className="text-sm">
+                        Cadastre uma matéria-prima em Estoque para adicioná-la aqui.
+                      </p>
+                    )}
+                    {ingredients.length > 0 && (
+                      <div className="overflow-x-auto rounded-md border">
+                        <table className="w-full min-w-[510px] text-left text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              {[
+                                "Ingrediente",
+                                "Quantidade utilizada",
+                                "Unidade de medida",
+                                "Ações",
+                              ].map((label) => (
+                                <th key={label} scope="col" className="px-2 py-2">
+                                  {label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ingredients.map((item, index) => {
+                              const material = materialsById.get(item.material_id);
+                              const units = compatibleUnits(material?.unit ?? item.unit);
+                              return (
+                                <tr key={item.key} className="border-b last:border-0">
+                                  <td className="p-2">
+                                    <select
+                                      aria-label={`Ingrediente ${index + 1}`}
+                                      className={selectClass}
+                                      value={item.material_id}
+                                      required
+                                      onChange={(event) => {
+                                        const selected = materialsById.get(event.target.value);
+                                        updateIngredient(item.key, {
+                                          material_id: selected?.id ?? "",
+                                          unit: selected?.unit ?? "",
+                                          quantity: "",
+                                        });
+                                      }}
+                                    >
+                                      <option value="">Selecione</option>
+                                      {item.material_id && !material && (
+                                        <option value={item.material_id}>
+                                          Ingrediente indisponível
+                                        </option>
+                                      )}
+                                      {materials.map((entry) => (
+                                        <option
+                                          key={entry.id}
+                                          value={entry.id}
+                                          disabled={ingredients.some(
+                                            (other) =>
+                                              other.key !== item.key &&
+                                              other.material_id === entry.id,
+                                          )}
+                                        >
+                                          {entry.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="p-2">
+                                    <Input
+                                      aria-label={`Quantidade utilizada ${index + 1}`}
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      required
+                                      value={item.quantity}
+                                      onChange={(event) =>
+                                        updateIngredient(item.key, { quantity: event.target.value })
+                                      }
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <select
+                                      aria-label={`Unidade de medida ${index + 1}`}
+                                      className={selectClass}
+                                      value={item.unit}
+                                      disabled={!material}
+                                      onChange={(event) =>
+                                        changeIngredientUnit(item, event.target.value)
+                                      }
+                                    >
+                                      {!units.includes(item.unit) && (
+                                        <option value={item.unit}>{item.unit}</option>
+                                      )}
+                                      {units.map((unit) => (
+                                        <option key={unit} value={unit}>
+                                          {unit || "—"}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="p-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      aria-label={`Remover ingrediente ${index + 1}`}
+                                      onClick={() =>
+                                        setIngredients((items) =>
+                                          items.filter((entry) => entry.key !== item.key),
+                                        )
+                                      }
+                                    >
+                                      Remover
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={ingredients.length >= Math.min(materials.length, 200)}
+                      onClick={() =>
+                        setIngredients((items) => [
+                          ...items,
+                          { key: crypto.randomUUID(), material_id: "", quantity: "", unit: "" },
+                        ])
+                      }
+                    >
+                      Adicionar ingrediente
+                    </Button>
                   </fieldset>
                 )}
                 {error && (

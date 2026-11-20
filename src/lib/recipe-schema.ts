@@ -20,5 +20,39 @@ export const recipeSchema = z.object({
   active: z.boolean(),
 });
 
-export type RecipeFields = z.infer<typeof recipeSchema>;
-export type Recipe = RecipeFields & { id: string };
+export const recipeIngredientsSchema = z
+  .array(
+    z.object({
+      material_id: z.string().min(1).max(100),
+      quantity: z.number().finite().positive(),
+      unit: z.string().min(1).max(80),
+    }),
+  )
+  .max(200)
+  .refine((items) => new Set(items.map((item) => item.material_id)).size === items.length, {
+    message: "Cada ingrediente pode aparecer apenas uma vez na ficha.",
+  });
+
+export type RecipeIngredient = z.infer<typeof recipeIngredientsSchema>[number];
+export type RecipeMaterial = { id: string; name: string; unit: string };
+export type Recipe = z.infer<typeof recipeSchema> & { id: string; ingredients: RecipeIngredient[] };
+
+const metricUnits = [
+  { base: "g", larger: "kg" },
+  { base: "ml", larger: "L" },
+] as const;
+
+export function compatibleUnits(unit: string): readonly string[] {
+  const pair = metricUnits.find(({ base, larger }) => unit === base || unit === larger);
+  return pair ? [pair.base, pair.larger] : [unit];
+}
+
+export function convertIngredientQuantity(quantity: number, from: string, to: string) {
+  if (!compatibleUnits(from).includes(to)) return undefined;
+  if (from === to) return quantity;
+  // Shift the decimal exponent so switching units does not add binary rounding artifacts.
+  const [coefficient, exponent] = quantity.toExponential().split("e");
+  const shift = from === "kg" || from === "L" ? 3 : -3;
+  const converted = Number(`${coefficient}e${Number(exponent) + shift}`);
+  return Number.isFinite(converted) && converted > 0 ? converted : undefined;
+}
