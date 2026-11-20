@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { Cookie, Package, ShoppingBag, Wallet, LayoutDashboard, ArrowRight, ClipboardList, LogOut } from "lucide-react";
+import { Cookie, Package, ShoppingBag, Wallet, LayoutDashboard, ArrowRight, ClipboardList, LogOut, BookOpen } from "lucide-react";
 import { InventoryManager } from "@/components/inventory-manager";
 import { ProductManager } from "@/components/product-manager";
 import { SalesFinanceManager } from "@/components/sales-finance-manager";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { BusinessProvider } from "@/lib/business-store";
+import { RecipeManager } from "@/components/recipe-manager";
 
 // The home route ships no og:image, so serve-time hosting can inject the
 // project's social preview (explicit og:image or latest screenshot).
@@ -24,12 +25,13 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Area = "visao-geral" | "estoque" | "produtos" | "vendas" | "financeiro";
+type Area = "visao-geral" | "estoque" | "produtos" | "receitas" | "vendas" | "financeiro";
 
 const areas: { id: Area; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "visao-geral", label: "Visão geral", icon: LayoutDashboard },
   { id: "estoque", label: "Estoque", icon: Package },
   { id: "produtos", label: "Produtos", icon: Cookie },
+  { id: "receitas", label: "Receitas / Fichas Técnicas", icon: BookOpen },
   { id: "vendas", label: "Vendas", icon: ShoppingBag },
   { id: "financeiro", label: "Financeiro", icon: Wallet },
 ];
@@ -46,6 +48,10 @@ const areaDetails: Record<Area, { title: string; description: string }> = {
   produtos: {
     title: "Produtos e receitas",
     description: "Cadastre suas bolachas e associe os ingredientes usados em cada receita.",
+  },
+  receitas: {
+    title: "Receitas / Fichas Técnicas",
+    description: "Consulte e mantenha as fichas de preparo das suas receitas.",
   },
   vendas: {
     title: "Vendas",
@@ -70,10 +76,10 @@ function Index() {
 
   if (!session) return <Navigate to="/login" />;
 
-  return <Dashboard key={session.user.id} email={session.user.email ?? ""} />;
+  return <Dashboard key={session.user.id} userId={session.user.id} email={session.user.email ?? ""} />;
 }
 
-function Dashboard({ email }: { email: string }) {
+function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [activeArea, setActiveArea] = useState<Area>("visao-geral");
   const [authError, setAuthError] = useState("");
   const currentArea = areaDetails[activeArea];
@@ -148,7 +154,8 @@ function Dashboard({ email }: { email: string }) {
             </div>
           </section>
 
-          <BusinessProvider>{activeArea === "estoque" ? (
+          <div hidden={activeArea === "receitas"}>
+          <BusinessProvider>{activeArea === "receitas" ? null : activeArea === "estoque" ? (
             <InventoryManager />
           ) : activeArea === "produtos" ? (
             <ProductManager />
@@ -210,6 +217,8 @@ function Dashboard({ email }: { email: string }) {
               )}
             </section>
           )}</BusinessProvider>
+          </div>
+          {activeArea === "receitas" && <RecipeManager userId={userId} />}
 
           <footer className="page-footer">Um painel feito para acompanhar cada fornada. <span>♡</span></footer>
         </div>
