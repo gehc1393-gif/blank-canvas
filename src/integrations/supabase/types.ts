@@ -221,6 +221,7 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          ingredients: Json
           instructions: string
           name: string
           notes: string
@@ -239,6 +240,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          ingredients?: Json
           instructions?: string
           name: string
           notes?: string
@@ -257,6 +259,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          ingredients?: Json
           instructions?: string
           name?: string
           notes?: string
