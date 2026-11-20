@@ -2,25 +2,11 @@ import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowDownToLine, ArrowUpRight, CircleDollarSign, ClipboardList, Plus, ReceiptText, Tag } from "lucide-react";
 
 import { useBusinessStore } from "@/lib/business-store";
+import type { BusinessData } from "@/lib/business-schema";
+import { calculatePresentationCost } from "@/lib/recipe-cost";
+import { useLinkedRecipes } from "@/lib/use-linked-recipes";
 
-type Material = {
-  id: string;
-  name: string;
-  unit: string;
-  quantity: number;
-  minimum: number;
-  unitCost: number;
-};
-
-type RecipeItem = { materialId: string; quantity: number };
-type Product = {
-  id: string;
-  name: string;
-  batchYield: number;
-  recipe: RecipeItem[];
-  producedUnits: number;
-  createdAt: string;
-};
+type Product = BusinessData["products"][number];
 type Sale = {
   id: string;
   productId: string;
@@ -62,9 +48,11 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
 }
 
-export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
+export function SalesFinanceManager({ mode, userId }: { mode: ManagerMode; userId: string }) {
   const { data, commit } = useBusinessStore();
   const { products, materials, sales, expenses, prices } = data;
+  const linked = useLinkedRecipes(userId, products.some((product) => Boolean(product.recipe_sheet_id)));
+  const sheetsById = new Map(linked.recipes.data?.map((sheet) => [sheet.id, sheet]));
   const ready = true;
   const [saleDraft, setSaleDraft] = useState<SaleDraft>({ productId: "", quantity: "1", unitPrice: "" });
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft>({ description: "", category: "Outros", amount: "", spentAt: today() });
@@ -85,6 +73,12 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
   }, [sales]);
 
   function productUnitCost(product: Product) {
+    if (product.recipe_sheet_id) {
+      const sheet = sheetsById.get(product.recipe_sheet_id);
+      if (!sheet?.ingredients.length) return null;
+      const cost = calculatePresentationCost(sheet, linked.materialsById, product.units_per_presentation ?? 1).perPresentation?.toNumber();
+      return cost !== undefined && Number.isFinite(cost) ? cost : null;
+    }
     return product.recipe.reduce((total, item) => {
       const material = materialsById.get(item.materialId);
       return total + (material ? material.unitCost * item.quantity : 0);
@@ -92,7 +86,8 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
   }
 
   function priceFor(product: Product) {
-    return prices[product.id] ?? Number((productUnitCost(product) * 2.5).toFixed(2));
+    const cost = productUnitCost(product);
+    return prices[product.id] ?? (cost === null ? null : Number((cost * 2.5).toFixed(2)));
   }
 
   const totalRevenue = sales.reduce((total, sale) => total + sale.quantity * sale.unitPrice, 0);
@@ -116,12 +111,17 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
       setMessage(`Estoque insuficiente de ${product.name}: há ${Math.max(available, 0)} unidade(s) disponível(is). Registre uma produção antes da venda.`);
       return;
     }
+    const cost = productUnitCost(product);
+    if (cost === null) {
+      setMessage("Não foi possível calcular o custo da apresentação. Confira a ficha técnica antes de registrar a venda.");
+      return;
+    }
     const sale: Sale = {
       id: makeId(),
       productId: product.id,
       quantity,
       unitPrice,
-      unitCost: productUnitCost(product),
+      unitCost: cost,
       soldAt: new Date().toISOString(),
     };
     if (!await commit({ ...data, sales: [sale, ...sales] })) return;
@@ -149,6 +149,7 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
   }
 
   async function updatePrice(productId: string, value: string) {
+    if (!value.trim()) return;
     const price = Number(value);
     if (Number.isFinite(price) && price >= 0) await commit({ ...data, prices: { ...prices, [productId]: price } });
   }
@@ -190,7 +191,7 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
                     Produto
                     <select required value={saleDraft.productId} onChange={(event) => {
                       const product = productsById.get(event.target.value);
-                      setSaleDraft((current) => ({ ...current, productId: event.target.value, unitPrice: product ? String(priceFor(product)) : "" }));
+                      setSaleDraft((current) => ({ ...current, productId: event.target.value, unitPrice: product ? String(priceFor(product) ?? "") : "" }));
                     }} className="mt-1.5 w-full rounded-md border border-[#e5dcd2] bg-white px-3 py-2.5 text-sm text-[#41352f] outline-none focus:border-[#b58b69]">
                       <option value="">Selecione um produto produzido</option>
                       {products.map((product) => {
@@ -253,9 +254,9 @@ export function SalesFinanceManager({ mode }: { mode: ManagerMode }) {
                     {products.map((product) => {
                       const cost = productUnitCost(product);
                       const price = priceFor(product);
-                      const profit = price - cost;
-                      const margin = price > 0 ? (profit / price) * 100 : 0;
-                      return <tr key={product.id}><td className="px-4 py-3.5 font-medium text-[#4a3c33]">{product.name}</td><td className="px-4 py-3.5 text-[#786c62]">{formatCurrency(cost)}</td><td className="px-4 py-3.5"><label className="sr-only" htmlFor={`price-${product.id}`}>Preço de venda de {product.name}</label><div className="flex max-w-40 items-center rounded-md border border-[#e5dcd2] bg-white px-2"><span className="text-xs text-[#897d72]">R$</span><input id={`price-${product.id}`} type="number" min="0" step="0.01" key={`${product.id}-${prices[product.id]}`} defaultValue={prices[product.id] ?? Number((cost * 2.5).toFixed(2))} onBlur={(event) => void updatePrice(product.id, event.target.value)} className="w-full border-0 bg-transparent px-2 py-2 text-sm text-[#41352f] outline-none" /></div></td><td className={profit >= 0 ? "px-4 py-3.5 font-medium text-[#5f7257]" : "px-4 py-3.5 font-medium text-[#a05d42]"}>{formatCurrency(profit)}</td><td className="px-4 py-3.5 text-[#786c62]">{price > 0 ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(margin)}%` : "—"}</td></tr>;
+                      const profit = price !== null && cost !== null ? price - cost : null;
+                      const margin = price && profit !== null ? (profit / price) * 100 : null;
+                      return <tr key={product.id}><td className="px-4 py-3.5 font-medium text-[#4a3c33]">{product.name}</td><td className="px-4 py-3.5 text-[#786c62]">{cost === null ? "—" : formatCurrency(cost)}</td><td className="px-4 py-3.5"><label className="sr-only" htmlFor={`price-${product.id}`}>Preço de venda de {product.name}</label><div className="flex max-w-40 items-center rounded-md border border-[#e5dcd2] bg-white px-2"><span className="text-xs text-[#897d72]">R$</span><input id={`price-${product.id}`} type="number" min="0" step="0.01" key={`${product.id}-${price}`} defaultValue={price ?? ""} onBlur={(event) => { if (event.target.value !== event.target.defaultValue) void updatePrice(product.id, event.target.value); }} className="w-full border-0 bg-transparent px-2 py-2 text-sm text-[#41352f] outline-none" /></div></td><td className={profit !== null && profit < 0 ? "px-4 py-3.5 font-medium text-[#a05d42]" : "px-4 py-3.5 font-medium text-[#5f7257]"}>{profit === null ? "—" : formatCurrency(profit)}</td><td className="px-4 py-3.5 text-[#786c62]">{margin === null ? "—" : `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(margin)}%`}</td></tr>;
                     })}
                   </tbody>
                 </table>

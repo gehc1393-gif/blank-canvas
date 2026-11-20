@@ -16,6 +16,6 @@ export const saveBusiness = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ revision: z.number().int().nonnegative(), data: businessSchema }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: revision, error } = await context.supabase.rpc("save_business_data", { expected_revision: data.revision, payload: data.data });
-    if (error) return { ok: false as const, conflict: error.message.includes("STALE_REVISION") };
+    if (error) return { ok: false as const, conflict: error.message.includes("STALE_REVISION"), invalidRecipe: error.message.includes("INVALID_RECIPE_LINK") };
     return { ok: true as const, revision };
   });

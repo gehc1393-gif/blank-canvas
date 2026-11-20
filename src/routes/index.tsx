@@ -81,6 +81,7 @@ function Index() {
 
 function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [activeArea, setActiveArea] = useState<Area>("visao-geral");
+  const [requestedRecipeId, setRequestedRecipeId] = useState<string>();
   const [authError, setAuthError] = useState("");
   const currentArea = areaDetails[activeArea];
 
@@ -102,7 +103,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
               key={id}
               type="button"
               className={`nav-link${activeArea === id ? " is-active" : ""}`}
-              onClick={() => setActiveArea(id)}
+              onClick={() => { setRequestedRecipeId(undefined); setActiveArea(id); }}
               aria-current={activeArea === id ? "page" : undefined}
             >
               <Icon size={18} strokeWidth={1.8} />
@@ -158,11 +159,11 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
           <BusinessProvider>{activeArea === "receitas" ? null : activeArea === "estoque" ? (
             <InventoryManager />
           ) : activeArea === "produtos" ? (
-            <ProductManager />
+            <ProductManager userId={userId} onViewRecipe={(id) => { setRequestedRecipeId(id); setActiveArea("receitas"); }} />
           ) : activeArea === "vendas" ? (
-            <SalesFinanceManager mode="vendas" />
+            <SalesFinanceManager mode="vendas" userId={userId} />
           ) : activeArea === "financeiro" ? (
-            <SalesFinanceManager mode="financeiro" />
+            <SalesFinanceManager mode="financeiro" userId={userId} />
           ) : activeArea === "visao-geral" ? (
             <>
               <div className="section-heading">
@@ -218,7 +219,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             </section>
           )}</BusinessProvider>
           </div>
-          {activeArea === "receitas" && <RecipeManager userId={userId} />}
+          {activeArea === "receitas" && <RecipeManager key={requestedRecipeId ?? "list"} userId={userId} initialRecipeId={requestedRecipeId} />}
 
           <footer className="page-footer">Um painel feito para acompanhar cada fornada. <span>♡</span></footer>
         </div>

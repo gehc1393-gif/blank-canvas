@@ -52,7 +52,7 @@ type IngredientDraft = Omit<RecipeIngredient, "quantity"> & { key: string; quant
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring";
 
-export function RecipeManager({ userId }: { userId: string }) {
+export function RecipeManager({ userId, initialRecipeId }: { userId: string; initialRecipeId?: string | undefined }) {
   const list = useServerFn(listRecipes);
   const change = useServerFn(changeRecipe);
   const listMaterials = useServerFn(listRecipeMaterials);
@@ -63,7 +63,10 @@ export function RecipeManager({ userId }: { userId: string }) {
   });
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [panel, setPanel] = useState<Panel | null>(null);
+  const [openedPanel, setPanel] = useState<Panel | null>(null);
+  const [requestedId, setRequestedId] = useState(initialRecipeId);
+  const requested = query.data?.find((recipe) => recipe.id === requestedId);
+  const panel: Panel | null = openedPanel ?? (requested ? { mode: "view", recipe: requested } : null);
   const [ingredients, setIngredients] = useState<IngredientDraft[]>([]);
   const [yieldDraft, setYieldDraft] = useState("");
   const materialsQuery = useQuery({
@@ -98,6 +101,7 @@ export function RecipeManager({ userId }: { userId: string }) {
   const costSummary = summarizeIngredientCosts(costs, yieldUnits);
 
   function openPanel(next: Panel | null) {
+    setRequestedId(undefined);
     setError("");
     setYieldDraft(next && "recipe" in next ? String(next.recipe.yield_units) : "");
     setIngredients(

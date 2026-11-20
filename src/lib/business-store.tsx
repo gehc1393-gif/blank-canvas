@@ -58,7 +58,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           revision.current = current.revision;
           setData(current.data);
           setError("Os registros foram alterados em outro dispositivo. Confira os saldos e tente novamente.");
-        } else setError("Não foi possível salvar. Seus registros anteriores foram mantidos.");
+        } else setError(result.invalidRecipe ? "A receita vinculada precisa existir e estar ativa. Confira a ficha técnica antes de salvar." : "Não foi possível salvar. Seus registros anteriores foram mantidos.");
         return false;
       }
       revision.current = result.revision;

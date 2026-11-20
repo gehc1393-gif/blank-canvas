@@ -1,4 +1,5 @@
 import { z } from "zod";
+export const presentationSizeSchema = z.number().int().positive().max(2147483647);
 
 export const recipeSchema = z.object({
   code: z

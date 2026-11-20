@@ -1,8 +1,31 @@
 import Decimal from "decimal.js";
-import { ingredientUnitShift, type RecipeMaterial } from "./recipe-schema";
+import { ingredientUnitShift, presentationSizeSchema, type RecipeMaterial } from "./recipe-schema";
 
 // Keep enough significant digits to sum products across the finite numeric range of the app.
 const Cost = Decimal.clone({ precision: 1400, rounding: Decimal.ROUND_HALF_UP });
+
+export function calculatePresentationCost(
+  recipe: {
+    ingredients: { material_id: string; quantity: number; unit: string }[];
+    yield_units: number;
+  },
+  materials: ReadonlyMap<string, RecipeMaterial>,
+  presentationSize: number,
+) {
+  const { total, perUnit } = summarizeIngredientCosts(
+    recipe.ingredients.map((item) =>
+      calculateIngredientCost(item.quantity, item.unit, materials.get(item.material_id)),
+    ),
+    recipe.yield_units,
+  );
+  return {
+    total,
+    perUnit,
+    perPresentation: presentationSizeSchema.safeParse(presentationSize).success
+      ? (perUnit?.times(presentationSize) ?? null)
+      : null,
+  };
+}
 
 export function calculateIngredientCost(
   quantity: string | number,
