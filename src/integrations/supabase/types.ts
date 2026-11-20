@@ -213,6 +213,63 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_sheets: {
+        Row: {
+          active: boolean
+          category: string
+          code: string
+          created_at: string
+          description: string
+          id: string
+          instructions: string
+          name: string
+          notes: string
+          oven_minutes: number | null
+          oven_temperature_c: number | null
+          prep_minutes: number | null
+          unit_weight_grams: number | null
+          updated_at: string
+          user_id: string
+          yield_units: number
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          code: string
+          created_at?: string
+          description?: string
+          id?: string
+          instructions?: string
+          name: string
+          notes?: string
+          oven_minutes?: number | null
+          oven_temperature_c?: number | null
+          prep_minutes?: number | null
+          unit_weight_grams?: number | null
+          updated_at?: string
+          user_id: string
+          yield_units: number
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          code?: string
+          created_at?: string
+          description?: string
+          id?: string
+          instructions?: string
+          name?: string
+          notes?: string
+          oven_minutes?: number | null
+          oven_temperature_c?: number | null
+          prep_minutes?: number | null
+          unit_weight_grams?: number | null
+          updated_at?: string
+          user_id?: string
+          yield_units?: number
+        }
+        Relationships: []
+      }
       sales: {
         Row: {
           created_at: string
