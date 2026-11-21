@@ -12,6 +12,9 @@ export function calculatePresentationCost(
   materials: ReadonlyMap<string, RecipeMaterial>,
   presentationSize: number,
 ) {
+  if (recipe.ingredients.length === 0) {
+    return { total: null, perUnit: null, perPresentation: null };
+  }
   const { total, perUnit } = summarizeIngredientCosts(
     recipe.ingredients.map((item) =>
       calculateIngredientCost(item.quantity, item.unit, materials.get(item.material_id)),

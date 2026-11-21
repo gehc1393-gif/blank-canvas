@@ -94,9 +94,19 @@ it("links an active sheet once, reloads it, and updates the package estimate wit
   await waitFor(() =>
     expect(data.productions[0]).toMatchObject({ units: 2, ingredient_cost: 16.76 }),
   );
-  sheets = [{ ...sheet, yield_units: 40 }, sheets[1]!];
+  sheets = [
+    {
+      ...sheet,
+      ingredients: sheet.ingredients.map((item) =>
+        item.material_id === "farinha" ? { ...item, quantity: 600 } : item,
+      ),
+    },
+    sheets[1]!,
+  ];
   reopened.rerender(<ProductManager userId="conta-teste" onViewRecipe={onViewRecipe} />);
-  expect(screen.getByText("R$ 4,19")).toBeInTheDocument();
+  expect(screen.getByText("R$ 17,56")).toBeInTheDocument();
+  expect(screen.getByText("R$ 0,88")).toBeInTheDocument();
+  expect(screen.getByText("R$ 8,78")).toBeInTheDocument();
   expect(screen.getByText(/Custo de ingredientes registrado: R\$ 16,76/)).toBeInTheDocument();
   expect(screen.getByLabelText("Preço de venda de Cookies pacote com 10")).toHaveValue(23);
 });

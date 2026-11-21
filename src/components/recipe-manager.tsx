@@ -355,7 +355,7 @@ export function RecipeManager({
         }}
       >
         {panel && (
-          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-4xl">
+          <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>
                 {panel.mode === "create"
@@ -425,7 +425,7 @@ export function RecipeManager({
                       )}
                     </dd>
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="min-w-0 sm:col-span-2">
                     <dt className="text-sm font-medium">Ingredientes da Receita</dt>
                     <dd className="text-sm">
                       {current.ingredients.length === 0 ? (
@@ -488,7 +488,7 @@ export function RecipeManager({
                 />
               </>
             ) : (
-              <form onSubmit={submit} className="space-y-4">
+              <form onSubmit={submit} className="min-w-0 space-y-4">
                 {!deactivating && (
                   <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
                     {fields.map((field) => (
@@ -555,7 +555,7 @@ export function RecipeManager({
                   </fieldset>
                 )}
                 {!deactivating && (
-                  <fieldset disabled={busy} className="space-y-3 border-t pt-3">
+                  <fieldset disabled={busy} className="min-w-0 space-y-3 border-t pt-3">
                     <legend className="text-sm font-semibold">Ingredientes da Receita</legend>
                     {materialsQuery.isPending && (
                       <p role="status" className="text-sm">
