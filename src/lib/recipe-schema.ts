@@ -36,7 +36,22 @@ export const recipeIngredientsSchema = z
 
 export type RecipeIngredient = z.infer<typeof recipeIngredientsSchema>[number];
 export type RecipeMaterial = { id: string; name: string; unit: string; unitCost: string };
-export type Recipe = z.infer<typeof recipeSchema> & { id: string; ingredients: RecipeIngredient[] };
+export const recipeSnapshotSchema = recipeSchema.extend({ ingredients: recipeIngredientsSchema });
+export type Recipe = z.infer<typeof recipeSnapshotSchema> & {
+  id: string;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string | null;
+};
+
+export const recipeVersionSchema = z.object({
+  version: z.number().int().positive(),
+  changed_at: z.string().datetime({ offset: true }),
+  changed_by: z.string().uuid().nullable(),
+  action: z.enum(["baseline", "created", "edited", "deactivated", "reactivated"]),
+  snapshot: recipeSnapshotSchema,
+});
+export type RecipeVersion = z.infer<typeof recipeVersionSchema>;
 
 const metricUnits = [
   { base: "g", larger: "kg" },

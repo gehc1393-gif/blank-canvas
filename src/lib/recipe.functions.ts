@@ -4,8 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   compatibleUnits,
   convertIngredientQuantity,
-  recipeIngredientsSchema,
-  recipeSchema,
+  recipeSnapshotSchema,
+  recipeVersionSchema,
   type Recipe,
   type RecipeMaterial,
 } from "./recipe-schema";
@@ -26,9 +26,11 @@ export const listRecipes = createServerFn({ method: "POST" })
       if (error) throw new Error("Não foi possível carregar as receitas.");
       for (const item of data) {
         recipes.push({
-          ...recipeSchema.parse(item),
+          ...recipeSnapshotSchema.parse(item),
           id: item.id,
-          ingredients: recipeIngredientsSchema.parse(item.ingredients),
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          updatedBy: item.updated_by,
         });
       }
       if (data.length < pageSize) return recipes;
@@ -54,10 +56,32 @@ export const listRecipeMaterials = createServerFn({ method: "POST" })
     }
   });
 
-const recipeWithIngredients = recipeSchema.extend({ ingredients: recipeIngredientsSchema });
+export const listRecipeVersions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({ id: z.string().uuid(), before: z.number().int().positive().optional() })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    let query = context.supabase
+      .from("recipe_sheet_versions")
+      .select("version,changed_at,changed_by,action,snapshot")
+      .eq("user_id", context.userId)
+      .eq("recipe_sheet_id", data.id);
+    if (data.before !== undefined) query = query.lt("version", data.before);
+    const result = await query.order("version", { ascending: false }).limit(26);
+    if (result.error) throw new Error("Não foi possível carregar o histórico.");
+    const versions = z.array(recipeVersionSchema).parse(result.data);
+    return {
+      versions: versions.slice(0, 25),
+      next: versions.length > 25 ? (versions[24]?.version ?? null) : null,
+    };
+  });
+
 const actionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("create"), fields: recipeWithIngredients }),
-  z.object({ action: z.literal("edit"), id: z.string().uuid(), fields: recipeWithIngredients }),
+  z.object({ action: z.literal("create"), fields: recipeSnapshotSchema }),
+  z.object({ action: z.literal("edit"), id: z.string().uuid(), fields: recipeSnapshotSchema }),
   z.object({ action: z.literal("deactivate"), id: z.string().uuid() }),
 ]);
 

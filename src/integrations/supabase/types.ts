@@ -230,6 +230,44 @@ export type Database = {
           },
         ]
       }
+      recipe_sheet_versions: {
+        Row: {
+          action: string
+          changed_at: string
+          changed_by: string | null
+          recipe_sheet_id: string
+          snapshot: Json
+          user_id: string
+          version: number
+        }
+        Insert: {
+          action: string
+          changed_at: string
+          changed_by?: string | null
+          recipe_sheet_id: string
+          snapshot: Json
+          user_id: string
+          version: number
+        }
+        Update: {
+          action?: string
+          changed_at?: string
+          changed_by?: string | null
+          recipe_sheet_id?: string
+          snapshot?: Json
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_sheet_versions_user_id_recipe_sheet_id_fkey"
+            columns: ["user_id", "recipe_sheet_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_sheets"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
+      }
       recipe_sheets: {
         Row: {
           active: boolean
@@ -247,6 +285,7 @@ export type Database = {
           prep_minutes: number | null
           unit_weight_grams: number | null
           updated_at: string
+          updated_by: string | null
           user_id: string
           yield_units: number
         }
@@ -266,6 +305,7 @@ export type Database = {
           prep_minutes?: number | null
           unit_weight_grams?: number | null
           updated_at?: string
+          updated_by?: string | null
           user_id: string
           yield_units: number
         }
@@ -285,6 +325,7 @@ export type Database = {
           prep_minutes?: number | null
           unit_weight_grams?: number | null
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
           yield_units?: number
         }

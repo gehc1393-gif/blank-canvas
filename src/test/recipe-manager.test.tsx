@@ -6,6 +6,7 @@ import {
   changeRecipe,
   listRecipeMaterials,
   listRecipes,
+  listRecipeVersions,
   type RecipeAction,
 } from "@/lib/recipe.functions";
 import {
@@ -19,11 +20,27 @@ vi.mock("@/lib/recipe.functions", () => ({
   changeRecipe: vi.fn(),
   listRecipes: vi.fn(),
   listRecipeMaterials: vi.fn(),
+  listRecipeVersions: vi.fn(),
 }));
 
-it("validates yield, then creates, filters, views, edits and deactivates a recipe with server responses", async () => {
+it("creates, edits, deactivates, reviews history and duplicates a recipe with simulated server responses", async () => {
   let records: Recipe[] = [];
+  let originalSnapshot: Recipe | undefined;
   vi.mocked(listRecipes).mockImplementation(async () => records);
+  vi.mocked(listRecipeVersions).mockImplementation(async () => ({
+    versions: originalSnapshot
+      ? [
+          {
+            version: 1,
+            action: "created",
+            changed_at: "2026-11-20T12:00:00Z",
+            changed_by: null,
+            snapshot: originalSnapshot,
+          },
+        ]
+      : [],
+    next: null,
+  }));
   vi.mocked(listRecipeMaterials).mockResolvedValue([
     { id: "farinha", name: "Farinha", unit: "kg", unitCost: "8" },
     { id: "leite", name: "Leite", unit: "L", unitCost: "10" },
@@ -31,7 +48,9 @@ it("validates yield, then creates, filters, views, edits and deactivates a recip
   vi.mocked(changeRecipe).mockImplementation(async (options) => {
     const action = (options as { data: RecipeAction }).data;
     if (action.action === "create") {
-      records = [...records, { ...action.fields, id: "73f90be5-ffb9-4aa5-9112-b1e4e771b86a" }];
+      const record = { ...action.fields, id: crypto.randomUUID() };
+      originalSnapshot ??= record;
+      records = [...records, record];
     } else {
       records = records.map((item) =>
         item.id === action.id
@@ -118,6 +137,34 @@ it("validates yield, then creates, filters, views, edits and deactivates a recip
   );
   await screen.findByText("Inativa");
   expect(screen.getByRole("button", { name: "Inativar Ficha de teste" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Visualizar Ficha de teste" }));
+  const historyDialog = within(screen.getByRole("dialog"));
+  expect(historyDialog.getByText("Inativa")).toBeInTheDocument();
+  fireEvent.click(await historyDialog.findByRole("button", { name: "Ver versão 1" }));
+  expect(historyDialog.getByText("Ativa")).toBeInTheDocument();
+  expect(historyDialog.getByText("100 ml")).toBeInTheDocument();
+  fireEvent.click(historyDialog.getByRole("button", { name: "Voltar à ficha atual" }));
+  expect(historyDialog.queryByText("100 ml")).not.toBeInTheDocument();
+  fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: "Duplicar Ficha de teste" }));
+  const duplicateDialog = within(screen.getByRole("dialog", { name: "Duplicar receita" }));
+  expect((duplicateDialog.getByLabelText("Código") as HTMLInputElement).value).toMatch(
+    /^FT-[A-F0-9-]{36}$/,
+  );
+  expect(duplicateDialog.getByLabelText("Quantidade utilizada 1")).toHaveValue(300);
+  fireEvent.change(duplicateDialog.getByLabelText("Nome da receita"), {
+    target: { value: "Variação de teste" },
+  });
+  fireEvent.click(duplicateDialog.getByRole("button", { name: "Salvar receita" }));
+  await screen.findByRole("rowheader", { name: "Variação de teste" });
+  expect(records[1]).toMatchObject({
+    name: "Variação de teste",
+    active: true,
+    ingredients: records[0]?.ingredients,
+  });
+  expect(records[1]?.id).not.toBe(records[0]?.id);
+  expect(records[1]?.code).not.toBe(records[0]?.code);
+  expect(records[0]).toMatchObject({ name: "Ficha de teste", active: false, code: "F-01" });
 });
 
 it("converts only within the same dimension and rejects repeated or nonpositive entries", () => {

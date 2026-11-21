@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { formatRecipeDate, recipeAuthor, RecipeHistory } from "@/components/recipe-history";
 import {
   calculateIngredientCost,
   formatIngredientCost,
@@ -31,6 +32,7 @@ import {
   type Recipe,
   type RecipeIngredient,
   type RecipeMaterial,
+  type RecipeVersion,
 } from "@/lib/recipe-schema";
 
 const fields = [
@@ -47,15 +49,25 @@ const fields = [
   { name: "notes", label: "Observações", multiline: true, maxLength: 3000 },
 ] as const;
 
-type Panel = { mode: "create" } | { mode: "view" | "edit" | "deactivate"; recipe: Recipe };
+type Panel =
+  | { mode: "create" }
+  | { mode: "duplicate"; recipe: Recipe; code: string }
+  | { mode: "view" | "edit" | "deactivate"; recipe: Recipe };
 type IngredientDraft = Omit<RecipeIngredient, "quantity"> & { key: string; quantity: string };
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring";
 
-export function RecipeManager({ userId, initialRecipeId }: { userId: string; initialRecipeId?: string | undefined }) {
+export function RecipeManager({
+  userId,
+  initialRecipeId,
+}: {
+  userId: string;
+  initialRecipeId?: string | undefined;
+}) {
   const list = useServerFn(listRecipes);
   const change = useServerFn(changeRecipe);
   const listMaterials = useServerFn(listRecipeMaterials);
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["recipe-sheets", userId],
     queryFn: () => list(),
@@ -64,9 +76,11 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [openedPanel, setPanel] = useState<Panel | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<RecipeVersion | null>(null);
   const [requestedId, setRequestedId] = useState(initialRecipeId);
   const requested = query.data?.find((recipe) => recipe.id === requestedId);
-  const panel: Panel | null = openedPanel ?? (requested ? { mode: "view", recipe: requested } : null);
+  const panel: Panel | null =
+    openedPanel ?? (requested ? { mode: "view", recipe: requested } : null);
   const [ingredients, setIngredients] = useState<IngredientDraft[]>([]);
   const [yieldDraft, setYieldDraft] = useState("");
   const materialsQuery = useQuery({
@@ -88,7 +102,9 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
       recipe.name.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")) &&
       (!selectedCategory || recipe.category === selectedCategory),
   );
-  const current = panel && "recipe" in panel ? panel.recipe : undefined;
+  const savedRecipe = panel && "recipe" in panel ? panel.recipe : undefined;
+  const current =
+    savedRecipe && selectedVersion ? { ...savedRecipe, ...selectedVersion.snapshot } : savedRecipe;
   const view = panel?.mode === "view";
   const deactivating = panel?.mode === "deactivate";
   const materials = materialsQuery.data ?? [];
@@ -101,6 +117,7 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
   const costSummary = summarizeIngredientCosts(costs, yieldUnits);
 
   function openPanel(next: Panel | null) {
+    setSelectedVersion(null);
     setRequestedId(undefined);
     setError("");
     setYieldDraft(next && "recipe" in next ? String(next.recipe.yield_units) : "");
@@ -181,9 +198,9 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
       }
       const recipeFields = { ...result.data, ingredients: parsedIngredients.data };
       action =
-        panel.mode === "create"
-          ? { action: "create", fields: recipeFields }
-          : { action: "edit", id: panel.recipe.id, fields: recipeFields };
+        panel.mode === "edit"
+          ? { action: "edit", id: panel.recipe.id, fields: recipeFields }
+          : { action: "create", fields: recipeFields };
     }
     setBusy(true);
     setError("");
@@ -195,7 +212,18 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
         return;
       }
       openPanel(null);
-      setMessage(deactivating ? "Receita inativada." : "Receita salva.");
+      setMessage(
+        deactivating
+          ? "Receita inativada."
+          : panel.mode === "duplicate"
+            ? "Variação criada."
+            : "Receita salva.",
+      );
+      if (savedRecipe && panel.mode !== "duplicate") {
+        void queryClient.invalidateQueries({
+          queryKey: ["recipe-history", userId, savedRecipe.id],
+        });
+      }
       await query.refetch();
     } catch {
       setError("Não foi possível confirmar a gravação. Confira a lista antes de tentar novamente.");
@@ -292,6 +320,20 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
                         <Button
                           size="sm"
                           variant="outline"
+                          aria-label={`Duplicar ${recipe.name}`}
+                          onClick={() =>
+                            openPanel({
+                              mode: "duplicate",
+                              recipe,
+                              code: `FT-${crypto.randomUUID().toUpperCase()}`,
+                            })
+                          }
+                        >
+                          Duplicar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           aria-label={`Inativar ${recipe.name}`}
                           disabled={!recipe.active}
                           onClick={() => openPanel({ mode: "deactivate", recipe })}
@@ -318,92 +360,133 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
               <DialogTitle>
                 {panel.mode === "create"
                   ? "Nova Receita"
-                  : panel.mode === "edit"
-                    ? "Editar receita"
-                    : deactivating
-                      ? "Inativar receita"
-                      : current?.name}
+                  : panel.mode === "duplicate"
+                    ? "Duplicar receita"
+                    : panel.mode === "edit"
+                      ? "Editar receita"
+                      : deactivating
+                        ? "Inativar receita"
+                        : selectedVersion
+                          ? `${current?.name} — versão ${selectedVersion.version}`
+                          : current?.name}
               </DialogTitle>
               <DialogDescription>
                 {deactivating
                   ? `Inativar ${current?.name}? A ficha continuará disponível para consulta.`
                   : view
-                    ? "Dados da ficha técnica."
-                    : "Código, nome, categoria e rendimento são obrigatórios."}
+                    ? selectedVersion
+                      ? "Ficha arquivada. Os custos exibidos usam os preços atuais do estoque."
+                      : "Dados da ficha técnica."
+                    : panel.mode === "duplicate"
+                      ? "Revise o nome e os dados da variação antes de salvar."
+                      : "Código, nome, categoria e rendimento são obrigatórios."}
               </DialogDescription>
             </DialogHeader>
-            {view && current ? (
-              <dl className="grid gap-3 sm:grid-cols-2">
-                {fields.map((field) => (
-                  <div key={field.name} className={"multiline" in field ? "sm:col-span-2" : ""}>
-                    <dt className="text-sm font-medium">{field.label}</dt>
-                    <dd className="text-sm whitespace-pre-wrap break-words">
-                      {current[field.name] === "" || current[field.name] === null
-                        ? "—"
-                        : current[field.name]}
+            {view && current && savedRecipe ? (
+              <>
+                {selectedVersion && (
+                  <Button type="button" variant="outline" onClick={() => setSelectedVersion(null)}>
+                    Voltar à ficha atual
+                  </Button>
+                )}
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  {fields.map((field) => (
+                    <div key={field.name} className={"multiline" in field ? "sm:col-span-2" : ""}>
+                      <dt className="text-sm font-medium">{field.label}</dt>
+                      <dd className="text-sm whitespace-pre-wrap break-words">
+                        {current[field.name] === "" || current[field.name] === null
+                          ? "—"
+                          : current[field.name]}
+                      </dd>
+                    </div>
+                  ))}
+                  <div>
+                    <dt className="text-sm font-medium">Status</dt>
+                    <dd className="text-sm">{current.active ? "Ativa" : "Inativa"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium">Criada em</dt>
+                    <dd className="text-sm">{formatRecipeDate(savedRecipe.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium">
+                      {selectedVersion ? "Versão registrada em" : "Última alteração"}
+                    </dt>
+                    <dd className="text-sm">
+                      {formatRecipeDate(selectedVersion?.changed_at ?? savedRecipe.updatedAt)}
                     </dd>
                   </div>
-                ))}
-                <div>
-                  <dt className="text-sm font-medium">Status</dt>
-                  <dd className="text-sm">{current.active ? "Ativa" : "Inativa"}</dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="text-sm font-medium">Ingredientes da Receita</dt>
-                  <dd className="text-sm">
-                    {current.ingredients.length === 0 ? (
-                      "Nenhum ingrediente cadastrado."
-                    ) : (
-                      <div className="mt-2 overflow-x-auto rounded-md border">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="border-b">
-                              {[
-                                "Ingrediente",
-                                "Quantidade utilizada",
-                                "Preço de referência",
-                                "Custo utilizado",
-                              ].map((label) => (
-                                <th key={label} scope="col" className="p-2">
-                                  {label}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {current.ingredients.map((item, index) => {
-                              const material = materialsById.get(item.material_id);
-                              return (
-                                <tr key={item.material_id} className="border-b last:border-0">
-                                  <th scope="row" className="p-2 font-medium">
-                                    {material?.name ??
-                                      (materialsQuery.isPending
-                                        ? "Carregando nome…"
-                                        : "Ingrediente indisponível")}
+                  <div>
+                    <dt className="text-sm font-medium">Responsável</dt>
+                    <dd className="break-all text-sm">
+                      {recipeAuthor(
+                        selectedVersion ? selectedVersion.changed_by : savedRecipe.updatedBy,
+                        userId,
+                      )}
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-sm font-medium">Ingredientes da Receita</dt>
+                    <dd className="text-sm">
+                      {current.ingredients.length === 0 ? (
+                        "Nenhum ingrediente cadastrado."
+                      ) : (
+                        <div className="mt-2 overflow-x-auto rounded-md border">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b">
+                                {[
+                                  "Ingrediente",
+                                  "Quantidade utilizada",
+                                  "Preço de referência",
+                                  "Custo utilizado",
+                                ].map((label) => (
+                                  <th key={label} scope="col" className="p-2">
+                                    {label}
                                   </th>
-                                  <td className="p-2 whitespace-nowrap">
-                                    {item.quantity.toLocaleString("pt-BR", {
-                                      maximumSignificantDigits: 17,
-                                    })}{" "}
-                                    {item.unit}
-                                  </td>
-                                  <td className="p-2 whitespace-nowrap">
-                                    {referencePrice(material)}
-                                  </td>
-                                  <td className="p-2 whitespace-nowrap">
-                                    {formatIngredientCost(costs[index] ?? null)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    <IngredientCostSummary summary={costSummary} yieldUnits={yieldUnits} />
-                  </dd>
-                </div>
-              </dl>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {current.ingredients.map((item, index) => {
+                                const material = materialsById.get(item.material_id);
+                                return (
+                                  <tr key={item.material_id} className="border-b last:border-0">
+                                    <th scope="row" className="p-2 font-medium">
+                                      {material?.name ??
+                                        (materialsQuery.isPending
+                                          ? "Carregando nome…"
+                                          : "Ingrediente indisponível")}
+                                    </th>
+                                    <td className="p-2 whitespace-nowrap">
+                                      {item.quantity.toLocaleString("pt-BR", {
+                                        maximumSignificantDigits: 17,
+                                      })}{" "}
+                                      {item.unit}
+                                    </td>
+                                    <td className="p-2 whitespace-nowrap">
+                                      {referencePrice(material)}
+                                    </td>
+                                    <td className="p-2 whitespace-nowrap">
+                                      {formatIngredientCost(costs[index] ?? null)}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <IngredientCostSummary summary={costSummary} yieldUnits={yieldUnits} />
+                    </dd>
+                  </div>
+                </dl>
+                <RecipeHistory
+                  recipeId={savedRecipe.id}
+                  userId={userId}
+                  onSelect={setSelectedVersion}
+                />
+              </>
             ) : (
               <form onSubmit={submit} className="space-y-4">
                 {!deactivating && (
@@ -444,7 +527,14 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
                             name={field.name}
                             required
                             maxLength={field.maxLength}
-                            defaultValue={current?.[field.name] ?? ""}
+                            readOnly={panel.mode === "duplicate" && field.name === "code"}
+                            defaultValue={
+                              panel.mode === "duplicate" && field.name === "code"
+                                ? panel.code
+                                : panel.mode === "duplicate" && field.name === "name"
+                                  ? `${panel.recipe.name.slice(0, 112)} — cópia`
+                                  : (current?.[field.name] ?? "")
+                            }
                           />
                         )}
                       </label>
@@ -454,7 +544,9 @@ export function RecipeManager({ userId, initialRecipeId }: { userId: string; ini
                       <select
                         name="active"
                         className={selectClass}
-                        defaultValue={String(current?.active ?? true)}
+                        defaultValue={String(
+                          panel.mode === "duplicate" ? true : (current?.active ?? true),
+                        )}
                       >
                         <option value="true">Ativa</option>
                         <option value="false">Inativa</option>
