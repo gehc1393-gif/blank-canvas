@@ -7,6 +7,7 @@ import { SalesFinanceManager } from "@/components/sales-finance-manager";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { BusinessProvider } from "@/lib/business-store";
+import { SupplierManager } from "@/components/supplier-manager";
 import { RecipeManager } from "@/components/recipe-manager";
 
 // The home route ships no og:image, so serve-time hosting can inject the
@@ -25,10 +26,11 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Area = "visao-geral" | "estoque" | "produtos" | "receitas" | "vendas" | "financeiro";
+type Area = "fornecedores" | "visao-geral" | "estoque" | "produtos" | "receitas" | "vendas" | "financeiro";
 
 const areas: { id: Area; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "visao-geral", label: "Visão geral", icon: LayoutDashboard },
+  { id: "fornecedores", label: "Fornecedores", icon: ClipboardList },
   { id: "estoque", label: "Estoque", icon: Package },
   { id: "produtos", label: "Produtos", icon: Cookie },
   { id: "receitas", label: "Receitas / Fichas Técnicas", icon: BookOpen },
@@ -41,6 +43,7 @@ const areaDetails: Record<Area, { title: string; description: string }> = {
     title: "Visão geral",
     description: "Um espaço para acompanhar a rotina e os números da sua produção.",
   },
+  fornecedores: { title: "Fornecedores", description: "Consulte e mantenha os contatos dos seus fornecedores." },
   estoque: {
     title: "Estoque de matérias-primas",
     description: "Organize ingredientes, quantidades disponíveis e movimentações do estoque.",
@@ -155,8 +158,8 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             </div>
           </section>
 
-          <div hidden={activeArea === "receitas"}>
-          <BusinessProvider>{activeArea === "receitas" ? null : activeArea === "estoque" ? (
+          <div hidden={activeArea === "receitas" || activeArea === "fornecedores"}>
+          <BusinessProvider>{activeArea === "receitas" || activeArea === "fornecedores" ? null : activeArea === "estoque" ? (
             <InventoryManager />
           ) : activeArea === "produtos" ? (
             <ProductManager userId={userId} onViewRecipe={(id) => { setRequestedRecipeId(id); setActiveArea("receitas"); }} />
@@ -219,6 +222,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             </section>
           )}</BusinessProvider>
           </div>
+          {activeArea === "fornecedores" && <SupplierManager userId={userId} />}
           {activeArea === "receitas" && <RecipeManager key={requestedRecipeId ?? "list"} userId={userId} initialRecipeId={requestedRecipeId} />}
 
           <footer className="page-footer">Um painel feito para acompanhar cada fornada. <span>♡</span></footer>
