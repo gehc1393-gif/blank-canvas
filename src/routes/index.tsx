@@ -160,7 +160,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
 
           <div hidden={activeArea === "receitas" || activeArea === "fornecedores"}>
           <BusinessProvider>{activeArea === "receitas" || activeArea === "fornecedores" ? null : activeArea === "estoque" ? (
-            <InventoryManager />
+            <InventoryManager userId={userId} />
           ) : activeArea === "produtos" ? (
             <ProductManager userId={userId} onViewRecipe={(id) => { setRequestedRecipeId(id); setActiveArea("receitas"); }} />
           ) : activeArea === "vendas" ? (

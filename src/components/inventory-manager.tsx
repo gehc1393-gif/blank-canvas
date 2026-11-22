@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, Plus, Search } from "lucide-react";
 
+import { MaterialSuppliers } from "@/components/material-suppliers";
 import { useBusinessStore } from "@/lib/business-store";
 
 type Material = {
@@ -63,7 +64,8 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
-export function InventoryManager() {
+export function InventoryManager({ userId = "" }: { userId?: string } = {}) {
+  const [supplierMaterial, setSupplierMaterial] = useState<Material | null>(null);
   const { data, commit } = useBusinessStore();
   const { materials, movements } = data;
   const ready = true;
@@ -197,6 +199,7 @@ export function InventoryManager() {
         </div>
       )}
 
+      {supplierMaterial && <MaterialSuppliers userId={userId} material={supplierMaterial} close={() => setSupplierMaterial(null)} />}
       {showMaterialForm && (
         <form onSubmit={createMaterial} className="rounded-xl border border-[#eee7de] bg-[#fffdfa] p-5">
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#4a3c33]"><Package size={18} /> Nova matéria-prima</div>
@@ -292,7 +295,7 @@ export function InventoryManager() {
                       <td className="px-4 py-3.5 text-[#786c62]">{formatQuantity(material.minimum, material.unit)}</td>
                       <td className="px-4 py-3.5 text-[#786c62]">{formatCurrency(material.unitCost)}</td>
                       <td className="px-4 py-3.5 text-[#786c62]">{formatCurrency(material.quantity * material.unitCost)}</td>
-                      <td className="px-4 py-3.5"><div className="flex gap-2"><button type="button" onClick={() => openAdjustment(material, "entrada")} aria-label={`Registrar entrada de ${material.name}`} title="Registrar entrada" className="grid h-8 w-8 place-items-center rounded-md border border-[#e5dcd2] text-[#6f805f] hover:bg-[#edf2e9]"><ArrowDownToLine size={15} /></button><button type="button" onClick={() => openAdjustment(material, "saida")} aria-label={`Registrar saída de ${material.name}`} title="Registrar saída" className="grid h-8 w-8 place-items-center rounded-md border border-[#e5dcd2] text-[#9a6844] hover:bg-[#f8eee6]"><ArrowUpFromLine size={15} /></button></div></td>
+                      <td className="px-4 py-3.5"><div className="flex gap-2"><button type="button" className="rounded border px-2" onClick={() => setSupplierMaterial(material)}>Fornecedores</button><button type="button" onClick={() => openAdjustment(material, "entrada")} aria-label={`Registrar entrada de ${material.name}`} title="Registrar entrada" className="grid h-8 w-8 place-items-center rounded-md border border-[#e5dcd2] text-[#6f805f] hover:bg-[#edf2e9]"><ArrowDownToLine size={15} /></button><button type="button" onClick={() => openAdjustment(material, "saida")} aria-label={`Registrar saída de ${material.name}`} title="Registrar saída" className="grid h-8 w-8 place-items-center rounded-md border border-[#e5dcd2] text-[#9a6844] hover:bg-[#f8eee6]"><ArrowUpFromLine size={15} /></button></div></td>
                     </tr>
                   );
                 })}
