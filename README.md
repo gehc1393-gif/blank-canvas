@@ -1,6 +1,6 @@
-# Blank Canvas
+# Ana Gestão
 
-.
+Painel de gestão da Ana Bolachas Artesanais.
 
 This project was built with [Lovable](https://lovable.dev).
 
