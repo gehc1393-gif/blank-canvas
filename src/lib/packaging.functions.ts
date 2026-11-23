@@ -42,12 +42,17 @@ export const listPackaging = createServerFn({ method: "POST" })
       | "purchase_price"
       | "purchase_quantity"
       | "use_unit"
+      | "stock_balance"
+      | "last_stock_at"
+      | "minimum"
       | "updated_at"
     >[] = [];
     for (let offset = 0; ; offset += 500) {
       const page = await db
         .from("packaging")
-        .select("id,name,code,category,active,purchase_price,purchase_quantity,use_unit,updated_at")
+        .select(
+          "id,name,code,category,active,purchase_price,purchase_quantity,use_unit,minimum,stock_balance,last_stock_at,updated_at",
+        )
         .eq("user_id", context.userId)
         .order("code")
         .range(offset, offset + 499);
@@ -92,6 +97,7 @@ export const savePackaging = createServerFn({ method: "POST" })
             .eq("id", data.id)
             .eq("updated_at", data.updated_at);
     const result = await query.select("id").maybeSingle();
+    if (result.error?.code === "P0001") throw new Error(result.error.message);
     if (result.error?.code === "23505") throw new Error("Código já cadastrado nesta conta.");
     if (result.error) throw new Error("Falha ao salvar a embalagem.");
     if (!result.data) throw new Error("Registro alterado em outra sessão. Reabra a embalagem.");

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { StockBalance, StockIndicators, StockPanel } from "@/components/packaging-stock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,6 +44,8 @@ export function PackagingManager({ userId }: { userId: string }) {
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState("todos"),
     [category, setCategory] = useState("");
+  const [stock, setStock] = useState<{ id: string; move: boolean } | null>(null);
+  const stockItem = query.data?.rows.find((r) => r.id === stock?.id);
   const [panel, setPanel] = useState<Panel | null>(null),
     [busy, setBusy] = useState(false);
   const [error, setError] = useState(""),
@@ -172,6 +175,7 @@ export function PackagingManager({ userId }: { userId: string }) {
       )}
       {notice && <p role="status">{notice}</p>}
       {!panel && error && <p role="alert">{error}</p>}
+      {query.data && <StockIndicators rows={query.data.rows} userId={userId} />}
       {rows?.length === 0 && <p>Nenhuma embalagem encontrada.</p>}
       {rows?.map((r) => (
         <article
@@ -190,7 +194,16 @@ export function PackagingManager({ userId }: { userId: string }) {
               {r.purchase_price > 0 && " / " + r.use_unit}
             </p>
           </div>
+          <StockBalance item={r} />
           <div className="flex flex-wrap gap-2">
+            {r.active && (
+              <Button variant="outline" onClick={() => setStock({ id: r.id, move: true })}>
+                Movimentar Estoque
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setStock({ id: r.id, move: false })}>
+              Histórico de Estoque
+            </Button>
             <Button disabled={busy} variant="outline" onClick={() => details(r.id, "view")}>
               Visualizar
             </Button>
@@ -427,7 +440,30 @@ export function PackagingManager({ userId }: { userId: string }) {
               </form>
             )
           )}
+          {panel?.mode === "view" && (
+            <StockPanel item={panel.row} userId={userId} allowMove={false} />
+          )}
           {error && <p role="alert">{error}</p>}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!stockItem}
+        onOpenChange={(v) => {
+          if (!v) setStock(null);
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{stockItem?.name}</DialogTitle>
+          </DialogHeader>
+          {stockItem && (
+            <StockPanel
+              key={stockItem.id}
+              item={stockItem}
+              userId={userId}
+              allowMove={!!stock?.move}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </section>

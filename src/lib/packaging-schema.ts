@@ -40,7 +40,13 @@ export const packagingSchema = z.object({
   active: z.boolean(),
 });
 export type Packaging = z.infer<typeof packagingSchema>;
-export type PackagingRow = Packaging & { id: string; created_at: string; updated_at: string };
+export type PackagingRow = Packaging & {
+  stock_balance: number;
+  last_stock_at: string | null;
+  id: string;
+  created_at: string;
+  updated_at: string;
+};
 export const emptyPackaging: Packaging = {
   code: "",
   name: "",
