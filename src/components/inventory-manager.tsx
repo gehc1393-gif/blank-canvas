@@ -140,12 +140,16 @@ export function InventoryManager({ userId = "" }: { userId?: string } = {}) {
       return;
     }
 
+    const costChanged = movementDraft.kind === "entrada" && updatedCost !== undefined && updatedCost !== material.unitCost;
+    if (costChanged &&
+        !window.confirm(`Alterar o custo de referência de ${material.name} de ${formatCurrency(material.unitCost)} para ${formatCurrency(updatedCost)} por ${material.unit}?`)) return;
     const nextMaterials = materials.map((item) => item.id !== material.id ? item : {
       ...item,
       quantity: item.quantity + (movementDraft.kind === "entrada" ? quantity : -quantity),
       ...(movementDraft.kind === "entrada" && updatedCost !== undefined ? { unitCost: updatedCost } : {}),
     });
     const movement: Movement = { id: makeId(), materialId: material.id, kind: movementDraft.kind, quantity, note: movementDraft.note.trim() || (movementDraft.kind === "entrada" ? "Entrada de estoque" : "Saída de estoque"), createdAt: new Date().toISOString() };
+    if (costChanged) movement.note += ` · Custo de referência: ${material.unitCost} → ${updatedCost} R$/${material.unit}`;
     if (!await commit({ ...data, materials: nextMaterials, movements: [movement, ...movements] })) return;
     setMessage(`${movementDraft.kind === "entrada" ? "Entrada" : "Saída"} registrada para ${material.name}.`);
     setAdjustingId(null);

@@ -32,3 +32,23 @@ it("registers and reloads an ingredient with its cost and initial stock movement
   render(<InventoryManager />);
   expect(screen.getByRole("cell", { name: "Farinha de teste" })).toBeInTheDocument();
 });
+
+it("exige confirmação para mudar o custo de referência", async () => {
+  const data = { ...emptyBusinessData, materials: [{id:"qa",name:"Farinha QA",quantity:2,minimum:0,unit:"kg",unitCost:8}] };
+  const commit = vi.fn(async (_next: BusinessData) => true);
+  vi.mocked(useBusinessStore).mockReturnValue({ data, commit });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  try {
+    render(<InventoryManager />);
+    fireEvent.click(screen.getByRole("button", {name:"Registrar entrada de Farinha QA"}));
+    fireEvent.change(screen.getByLabelText("Quantidade (kg)"), {target:{value:"1"}});
+    fireEvent.change(screen.getByLabelText(/Novo custo por unidade/), {target:{value:"7"}});
+    const save = screen.getByRole("button", {name:"Salvar movimentação"});
+    fireEvent.click(save);
+    expect(commit).not.toHaveBeenCalled();
+    fireEvent.click(save);
+    expect(commit.mock.calls[0]?.[0].materials[0]?.unitCost).toBe(7);
+    expect(commit.mock.calls[0]?.[0].movements[0]?.note).toContain("8 → 7 R$/kg");
+    await screen.findByText("Entrada registrada para Farinha QA.");
+  } finally { confirm.mockRestore(); }
+});

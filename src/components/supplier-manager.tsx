@@ -15,15 +15,16 @@ export function SupplierManager({ userId }: { userId: string }) {
   const [panel, setPanel] = useState<"new" | "view" | "edit" | null>(null);
   const [selected, setSelected] = useState<Supplier>(), [draft, setDraft] = useState(blankSupplier);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   function open(mode: typeof panel, row?: Supplier) {
-    setSelected(row); setDraft(row ?? blankSupplier); setError(""); setPanel(mode);
+    setNotice(""); setSelected(row); setDraft(row ?? blankSupplier); setError(""); setPanel(mode);
   }
   async function commit(data: NonNullable<Parameters<typeof save>[0]>["data"]) {
-    setError(""); setBusy(true);
+    setNotice(""); setError(""); setBusy(true);
     try {
       await save({ data });
       await client.invalidateQueries({ queryKey: key });
-      setPanel(null);
+      setPanel(null); setNotice("Cadastro atualizado.");
     } catch (err) { setError(err instanceof Error ? err.message : "Falha ao salvar."); }
     finally { setBusy(false); }
   }
@@ -39,6 +40,7 @@ export function SupplierManager({ userId }: { userId: string }) {
     </div>
     {query.isLoading && <p>Carregando fornecedores…</p>}
     {query.isError && <p role="alert">Falha ao carregar fornecedores. <button onClick={() => query.refetch()}>Tentar novamente</button></p>}
+    {notice && <p role="status">{notice}</p>}
     {!panel && error && <p role="alert">{error}</p>}
     {rows?.length === 0 && <p>Nenhum fornecedor encontrado.</p>}
     {rows?.map(row => <article key={row.id} className="rounded-lg border bg-white p-4 flex flex-wrap items-center justify-between gap-3">

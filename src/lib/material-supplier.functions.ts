@@ -9,7 +9,7 @@ const quote = z.object({
 });
 const links = z.array(z.object({
   supplier_id: z.string(), name: z.string(), active: z.boolean(), notes: z.string(),
-  is_primary: z.boolean(), history: z.array(quote),
+  linked: z.boolean(), is_primary: z.boolean(), history: z.array(quote),
 }));
 const materialId = z.string().min(1);
 export const readMaterialSuppliers = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth])
@@ -22,6 +22,7 @@ export const readMaterialSuppliers = createServerFn({ method: "POST" }).middlewa
 const base = z.object({ p_material: materialId, p_supplier: z.string().uuid() });
 const change = z.discriminatedUnion("p_action", [
   base.extend({ p_action: z.literal("link") }),
+  base.extend({ p_action: z.literal("unlink") }),
   base.extend({ p_action: z.literal("primary") }),
   base.extend({ p_action: z.literal("notes"), p_notes: z.string().max(3000) }),
   base.extend({ p_action: z.literal("quote"), p_price: z.number().finite().positive(),
