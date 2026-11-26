@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { BusinessProvider } from "@/lib/business-store";
 import { PackagingManager } from "@/components/packaging-manager";
+import { PurchaseManager } from "@/components/purchase-manager";
 import { SupplierManager } from "@/components/supplier-manager";
 import { RecipeManager } from "@/components/recipe-manager";
 
@@ -27,11 +28,12 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Area = "embalagens" | "fornecedores" | "visao-geral" | "estoque" | "produtos" | "receitas" | "vendas" | "financeiro";
+type Area = "compras" | "embalagens" | "fornecedores" | "visao-geral" | "estoque" | "produtos" | "receitas" | "vendas" | "financeiro";
 
 const areas: { id: Area; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "visao-geral", label: "Visão geral", icon: LayoutDashboard },
   { id: "embalagens", label: "Embalagens", icon: Package },
+  { id: "compras", label: "Compras", icon: ShoppingBag },
   { id: "fornecedores", label: "Fornecedores", icon: ClipboardList },
   { id: "estoque", label: "Estoque", icon: Package },
   { id: "produtos", label: "Produtos", icon: Cookie },
@@ -46,6 +48,7 @@ const areaDetails: Record<Area, { title: string; description: string }> = {
     description: "Um espaço para acompanhar a rotina e os números da sua produção.",
   },
   embalagens: { title: "Embalagens", description: "Consulte materiais de apresentação, medidas e custos por unidade." },
+  compras: { title: "Compras", description: "Planeje e acompanhe pedidos de compra." },
   fornecedores: { title: "Fornecedores", description: "Consulte e mantenha os contatos dos seus fornecedores." },
   estoque: {
     title: "Estoque de matérias-primas",
@@ -161,8 +164,8 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             </div>
           </section>
 
-          <div hidden={activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores"}>
-          <BusinessProvider>{activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores" ? null : activeArea === "estoque" ? (
+          <div hidden={activeArea === "compras" || activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores"}>
+          <BusinessProvider>{activeArea === "compras" || activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores" ? null : activeArea === "estoque" ? (
             <InventoryManager userId={userId} />
           ) : activeArea === "produtos" ? (
             <ProductManager userId={userId} onViewRecipe={(id) => { setRequestedRecipeId(id); setActiveArea("receitas"); }} />
@@ -225,6 +228,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             </section>
           )}</BusinessProvider>
           </div>
+          {activeArea === "compras" && <PurchaseManager userId={userId} />}
           {activeArea === "embalagens" && <PackagingManager userId={userId} />}
           {activeArea === "fornecedores" && <SupplierManager userId={userId} />}
           {activeArea === "receitas" && <RecipeManager key={requestedRecipeId ?? "list"} userId={userId} initialRecipeId={requestedRecipeId} />}
