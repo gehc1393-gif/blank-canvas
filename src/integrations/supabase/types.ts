@@ -68,6 +68,48 @@ export type Database = {
         }
         Relationships: []
       }
+      material_suppliers: {
+        Row: {
+          is_primary: boolean
+          linked: boolean
+          material_id: string
+          notes: string
+          supplier_id: string
+          user_id: string
+        }
+        Insert: {
+          is_primary?: boolean
+          linked?: boolean
+          material_id: string
+          notes?: string
+          supplier_id: string
+          user_id: string
+        }
+        Update: {
+          is_primary?: boolean
+          linked?: boolean
+          material_id?: string
+          notes?: string
+          supplier_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_suppliers_user_id_material_id_fkey"
+            columns: ["user_id", "material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
+            foreignKeyName: "material_suppliers_user_id_supplier_id_fkey"
+            columns: ["user_id", "supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
+      }
       materials: {
         Row: {
           created_at: string
@@ -103,6 +145,196 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      packaging: {
+        Row: {
+          active: boolean
+          category: string
+          code: string
+          created_at: string
+          depth: number | null
+          description: string
+          dimension_unit: string
+          height: number | null
+          id: string
+          last_stock_at: string | null
+          material: string
+          minimum: number
+          name: string
+          notes: string
+          photo: string
+          purchase_price: number
+          purchase_quantity: number
+          stock_balance: number
+          updated_at: string
+          use_unit: string
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          code: string
+          created_at?: string
+          depth?: number | null
+          description?: string
+          dimension_unit?: string
+          height?: number | null
+          id?: string
+          last_stock_at?: string | null
+          material?: string
+          minimum?: number
+          name: string
+          notes?: string
+          photo?: string
+          purchase_price: number
+          purchase_quantity: number
+          stock_balance?: number
+          updated_at?: string
+          use_unit: string
+          user_id?: string
+          width?: number | null
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          code?: string
+          created_at?: string
+          depth?: number | null
+          description?: string
+          dimension_unit?: string
+          height?: number | null
+          id?: string
+          last_stock_at?: string | null
+          material?: string
+          minimum?: number
+          name?: string
+          notes?: string
+          photo?: string
+          purchase_price?: number
+          purchase_quantity?: number
+          stock_balance?: number
+          updated_at?: string
+          use_unit?: string
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packaging_category_fkey"
+            columns: ["category"]
+            isOneToOne: false
+            referencedRelation: "packaging_categories"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
+      packaging_categories: {
+        Row: {
+          name: string
+        }
+        Insert: {
+          name: string
+        }
+        Update: {
+          name?: string
+        }
+        Relationships: []
+      }
+      packaging_stock_movements: {
+        Row: {
+          kind: string
+          movement_date: string
+          new_balance: number
+          notes: string
+          operation_id: string
+          packaging_id: string
+          previous_balance: number
+          quantity: number
+          reason: string
+          recorded_at: string
+          responsible: string
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          kind: string
+          movement_date: string
+          new_balance: number
+          notes: string
+          operation_id: string
+          packaging_id: string
+          previous_balance: number
+          quantity: number
+          reason: string
+          recorded_at: string
+          responsible: string
+          unit: string
+          user_id: string
+        }
+        Update: {
+          kind?: string
+          movement_date?: string
+          new_balance?: number
+          notes?: string
+          operation_id?: string
+          packaging_id?: string
+          previous_balance?: number
+          quantity?: number
+          reason?: string
+          recorded_at?: string
+          responsible?: string
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packaging_stock_movements_user_id_packaging_id_fkey"
+            columns: ["user_id", "packaging_id"]
+            isOneToOne: false
+            referencedRelation: "packaging"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
+      }
+      product_packaging: {
+        Row: {
+          packaging_id: string
+          product_id: string
+          quantity: number
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          packaging_id: string
+          product_id: string
+          quantity: number
+          unit: string
+          user_id: string
+        }
+        Update: {
+          packaging_id?: string
+          product_id?: string
+          quantity?: number
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_packaging_user_id_packaging_id_unit_fkey"
+            columns: ["user_id", "packaging_id", "unit"]
+            isOneToOne: false
+            referencedRelation: "packaging"
+            referencedColumns: ["user_id", "id", "use_unit"]
+          },
+          {
+            foreignKeyName: "product_packaging_user_id_product_id_fkey"
+            columns: ["user_id", "product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
       }
       product_prices: {
         Row: {
@@ -419,15 +651,174 @@ export type Database = {
           },
         ]
       }
+      supplier_quotes: {
+        Row: {
+          id: number
+          material_id: string
+          package_price: number
+          package_quantity: number
+          quoted_on: string
+          recorded_at: string
+          recorded_by: string
+          supplier_id: string
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          id?: never
+          material_id: string
+          package_price: number
+          package_quantity: number
+          quoted_on: string
+          recorded_at?: string
+          recorded_by: string
+          supplier_id: string
+          unit: string
+          user_id: string
+        }
+        Update: {
+          id?: never
+          material_id?: string
+          package_price?: number
+          package_quantity?: number
+          quoted_on?: string
+          recorded_at?: string
+          recorded_by?: string
+          supplier_id?: string
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_quotes_user_id_material_id_supplier_id_fkey"
+            columns: ["user_id", "material_id", "supplier_id"]
+            isOneToOne: false
+            referencedRelation: "material_suppliers"
+            referencedColumns: ["user_id", "material_id", "supplier_id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          active: boolean
+          address: string
+          address_number: string
+          city: string
+          code: number
+          complement: string
+          contact: string
+          created_at: string
+          district: string
+          document: string
+          email: string
+          id: string
+          name: string
+          notes: string
+          person_type: string
+          phone: string
+          postal_code: string
+          state: string
+          trade_name: string
+          updated_at: string
+          user_id: string
+          whatsapp: string
+        }
+        Insert: {
+          active?: boolean
+          address?: string
+          address_number?: string
+          city?: string
+          code?: never
+          complement?: string
+          contact?: string
+          created_at?: string
+          district?: string
+          document?: string
+          email?: string
+          id?: string
+          name: string
+          notes?: string
+          person_type: string
+          phone?: string
+          postal_code?: string
+          state?: string
+          trade_name?: string
+          updated_at?: string
+          user_id: string
+          whatsapp?: string
+        }
+        Update: {
+          active?: boolean
+          address?: string
+          address_number?: string
+          city?: string
+          code?: never
+          complement?: string
+          contact?: string
+          created_at?: string
+          district?: string
+          document?: string
+          email?: string
+          id?: string
+          name?: string
+          notes?: string
+          person_type?: string
+          phone?: string
+          postal_code?: string
+          state?: string
+          trade_name?: string
+          updated_at?: string
+          user_id?: string
+          whatsapp?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      material_supplier_details: { Args: { p_material: string }; Returns: Json }
+      move_packaging_stock: {
+        Args: {
+          p_date: string
+          p_expected: number
+          p_item: string
+          p_kind: string
+          p_notes: string
+          p_operation: string
+          p_quantity: number
+          p_reason: string
+          p_unit: string
+        }
+        Returns: undefined
+      }
       read_business_data: { Args: never; Returns: Json }
+      read_product_packaging: { Args: { p_product: string }; Returns: Json }
       save_business_data: {
         Args: { expected_revision: number; payload: Json }
         Returns: number
+      }
+      save_material_supplier: {
+        Args: {
+          p_action: string
+          p_date?: string
+          p_material: string
+          p_notes?: string
+          p_price?: number
+          p_quantity?: number
+          p_supplier: string
+          p_unit?: string
+        }
+        Returns: undefined
+      }
+      save_product_packaging: {
+        Args: { p_expected: Json; p_items: Json; p_product: string }
+        Returns: undefined
+      }
+      valid_supplier_document: {
+        Args: { doc: string; kind: string }
+        Returns: boolean
       }
     }
     Enums: {
