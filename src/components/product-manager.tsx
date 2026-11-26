@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+import { ProductPackaging } from "@/components/product-packaging";
 import { useMemo, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ClipboardList, Cookie, Factory, Plus, Trash2 } from "lucide-react";
 
@@ -50,6 +52,7 @@ function formatQuantity(value: number, unit: string) {
 }
 
 export function ProductManager({ userId, onViewRecipe }: { userId: string; onViewRecipe: (id: string) => void }) {
+  const [packagingProduct, setPackagingProduct] = useState<string>();
   const { data, commit } = useBusinessStore();
   const { materials, products, productions, prices, sales } = data;
   const ready = true;
@@ -442,6 +445,7 @@ export function ProductManager({ userId, onViewRecipe }: { userId: string; onVie
                 </>}
                 <div className="flex justify-between gap-3 text-xs"><span className="text-[#897d72]">Total produzido</span><strong className="text-[#4a3c33]">{product.producedUnits} unidades</strong></div>
               </div>
+              <section className="mt-4 space-y-2 border-t pt-3"><button type="button" className="font-medium underline" aria-expanded={packagingProduct===product.id} onClick={()=>setPackagingProduct(packagingProduct===product.id?undefined:product.id)}>Composição de Embalagens</button>{packagingProduct===product.id && <ProductPackaging key={product.id} product={product.id} userId={userId} ingredients={product.recipe_sheet_id?presentationCost:product.recipe.length&&product.recipe.every(item=>materialsById.has(item.materialId))?new Decimal(totalCost).div(product.batchYield):null} price={prices[product.id]}/>}</section>
               <ul className="mt-4 space-y-1.5">
                 {product.recipe.map((item, index) => {
                   const material = materialsById.get(item.materialId);
