@@ -1,3 +1,4 @@
+import { PurchaseReceipts } from "@/components/purchase-receipts";
 import Decimal from "decimal.js";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,7 +46,13 @@ function draft(order?: Order): PurchaseRequest {
     items: order?.items ?? [{ ...emptyItem }],
   };
 }
-export function PurchaseManager({ userId }: { userId: string }) {
+export function PurchaseManager({
+  userId,
+  onStockChanged,
+}: {
+  userId: string;
+  onStockChanged: () => void;
+}) {
   const client = useQueryClient(),
     key = ["purchase", userId];
   const list = useServerFn(purchaseList),
@@ -139,9 +146,11 @@ export function PurchaseManager({ userId }: { userId: string }) {
               Situação
               <select className={select} value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="">Todas</option>
-                {["rascunho", "emitido", "cancelado"].map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
+                {["rascunho", "emitido", "parcialmente recebido", "recebido", "cancelado"].map(
+                  (s) => (
+                    <option key={s}>{s}</option>
+                  ),
+                )}
               </select>
             </label>
             <label>
@@ -445,6 +454,19 @@ export function PurchaseManager({ userId }: { userId: string }) {
                     Emitido em {selected.issued_at} por {selected.issued_by}
                   </p>
                 )}
+                {selected.issued_at && (
+                  <PurchaseReceipts
+                    key={selected.id}
+                    order={selected}
+                    userId={userId}
+                    onReload={async () => {
+                      onStockChanged();
+                      const result = await orders.refetch();
+                      const updated = result.data?.find((o) => o.id === selected.id);
+                      if (updated) setSelected(updated);
+                    }}
+                  />
+                )}
                 {selected.cancelled_at && (
                   <p>
                     Cancelado em {selected.cancelled_at} · {selected.cancellation_reason}
@@ -467,7 +489,7 @@ export function PurchaseManager({ userId }: { userId: string }) {
                   {selected.status === "rascunho" && (
                     <Button onClick={() => open(selected, true)}>Editar rascunho</Button>
                   )}
-                  {selected.status !== "cancelado" && (
+                  {["rascunho", "emitido"].includes(selected.status) && (
                     <Button variant="outline" onClick={() => setCancel(true)}>
                       Cancelar pedido
                     </Button>

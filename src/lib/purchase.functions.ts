@@ -50,6 +50,7 @@ export type Order = {
   items: (z.infer<typeof item> & {
     name: string;
     code: string;
+    line_id: string;
     stock_unit: string;
     receipt: number;
     total: number;

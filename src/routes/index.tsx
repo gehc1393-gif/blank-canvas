@@ -90,6 +90,7 @@ function Index() {
 
 function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [activeArea, setActiveArea] = useState<Area>("visao-geral");
+  const [stockVersion, setStockVersion] = useState(0);
   const [requestedRecipeId, setRequestedRecipeId] = useState<string>();
   const [authError, setAuthError] = useState("");
   const currentArea = areaDetails[activeArea];
@@ -165,7 +166,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
           </section>
 
           <div hidden={activeArea === "compras" || activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores"}>
-          <BusinessProvider>{activeArea === "compras" || activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores" ? null : activeArea === "estoque" ? (
+          <BusinessProvider key={stockVersion}>{activeArea === "compras" || activeArea === "embalagens" || activeArea === "receitas" || activeArea === "fornecedores" ? null : activeArea === "estoque" ? (
             <InventoryManager userId={userId} />
           ) : activeArea === "produtos" ? (
             <ProductManager userId={userId} onViewRecipe={(id) => { setRequestedRecipeId(id); setActiveArea("receitas"); }} />
@@ -228,7 +229,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             </section>
           )}</BusinessProvider>
           </div>
-          {activeArea === "compras" && <PurchaseManager userId={userId} />}
+          {activeArea === "compras" && <PurchaseManager userId={userId} onStockChanged={() => setStockVersion(version => version + 1)} />}
           {activeArea === "embalagens" && <PackagingManager userId={userId} />}
           {activeArea === "fornecedores" && <SupplierManager userId={userId} />}
           {activeArea === "receitas" && <RecipeManager key={requestedRecipeId ?? "list"} userId={userId} initialRecipeId={requestedRecipeId} />}
