@@ -1,3 +1,12 @@
+import {
+  expectedReceipt,
+  receivable,
+  pendingOrder,
+  lateOrder,
+  purchaseToday,
+  purchaseSummary,
+  purchaseStatuses,
+} from "@/lib/purchase-report";
 import { PurchaseReceipts } from "@/components/purchase-receipts";
 import Decimal from "decimal.js";
 import { useRef, useState } from "react";
@@ -8,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { listRecipeMaterials } from "@/lib/recipe.functions";
 import { listPackaging } from "@/lib/packaging.functions";
 import { listSuppliers } from "@/lib/supplier.functions";
-import { compatibleUnits, ingredientUnitShift } from "@/lib/recipe-schema";
+import { compatibleUnits } from "@/lib/recipe-schema";
 import {
   changePurchase,
   purchaseList,
@@ -78,6 +87,9 @@ export function PurchaseManager({
     [busy, setBusy] = useState(false),
     [cancel, setCancel] = useState(false),
     [reason, setReason] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [sort, setSort] = useState("number");
+  const today = purchaseToday();
   const operation = useRef({ signature: "", id: "" });
   const vendor = vendors.data?.find((v) => v.id === form?.supplier);
   function open(order?: Order, edit = false) {
@@ -89,6 +101,24 @@ export function PurchaseManager({
   }
   async function commit(data: PurchaseRequest) {
     if (busy) return;
+    if (data.action === "emitir") {
+      for (const line of data.items) {
+        const material =
+          line.kind === "ingrediente"
+            ? ingredients.data?.find((item) => item.id === line.id)
+            : packages.data?.rows.find((item) => item.id === line.id);
+        const unit = material && ("unit" in material ? material.unit : material.use_unit);
+        const quantity = unit
+          ? expectedReceipt(line.qty, line.content, line.content_unit, unit)
+          : null;
+        if (material && unit && quantity && !receivable(quantity, unit)) {
+          setMessage(
+            `${material.name}: ${quantity} ${unit} não pode ser recebido exatamente. Ajuste a quantidade antes de emitir.`,
+          );
+          return;
+        }
+      }
+    }
     const signature = JSON.stringify(data);
     if (operation.current.signature !== signature)
       operation.current = { signature, id: crypto.randomUUID() };
@@ -119,10 +149,30 @@ export function PurchaseManager({
     (o) =>
       (String(o.number).includes(search.trim()) ||
         o.supplier_name.toLowerCase().includes(search.trim().toLowerCase())) &&
-      (!status || o.status === status) &&
+      (!supplierFilter || o.supplier_id === supplierFilter) &&
+      (!status || (status === "atrasados" ? lateOrder(o, today) : o.status === status)) &&
       (!from || o.ordered_on >= from) &&
       (!to || o.ordered_on <= to),
   );
+  const visible = filtered ?? [];
+  const summary = purchaseSummary(visible, today);
+  const vendorOptions = new Map(orders.data?.map((o) => [o.supplier_id, o.supplier_name]));
+  const ordered = [...visible].sort((a, b) => {
+    if (sort === "ordered_on")
+      return b.ordered_on.localeCompare(a.ordered_on) || b.number - a.number;
+    if (sort === "delivery_on")
+      return (
+        (a.delivery_on ?? "9999").localeCompare(b.delivery_on ?? "9999") || b.number - a.number
+      );
+    if (sort === "status") return a.status.localeCompare(b.status) || b.number - a.number;
+    return b.number - a.number;
+  });
+  const suppliersSummary = visible.reduce((groups, o) => {
+    const group = groups.get(o.supplier_id) ?? [];
+    group.push(o);
+    groups.set(o.supplier_id, group);
+    return groups;
+  }, new Map<string, Order[]>());
   return (
     <section className="space-y-4">
       {message && <p role="status">{message}</p>}
@@ -146,9 +196,12 @@ export function PurchaseManager({
               Situação
               <select className={select} value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="">Todas</option>
+                <option value="atrasados">Atrasados</option>
                 {["rascunho", "emitido", "parcialmente recebido", "recebido", "cancelado"].map(
                   (s) => (
-                    <option key={s}>{s}</option>
+                    <option key={s} value={s}>
+                      {s === "emitido" ? "Aguardando recebimento" : s}
+                    </option>
                   ),
                 )}
               </select>
@@ -161,17 +214,90 @@ export function PurchaseManager({
               Até
               <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </label>
+            <label>
+              Fornecedor
+              <select
+                className={select}
+                value={supplierFilter}
+                onChange={(e) => setSupplierFilter(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {Array.from(vendorOptions, ([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ordenar por
+              <select className={select} value={sort} onChange={(e) => setSort(e.target.value)}>
+                <option value="number">Número</option>
+                <option value="ordered_on">Data do pedido</option>
+                <option value="delivery_on">Previsão de entrega</option>
+                <option value="status">Situação</option>
+              </select>
+            </label>
             <Button onClick={() => open()}>Novo Pedido</Button>
           </div>
           {orders.isPending && <p>Carregando pedidos…</p>}
           {filtered?.length === 0 && <p>Nenhum pedido encontrado.</p>}
-          {filtered?.map((o) => (
+          {orders.data && (
+            <section className="space-y-2 rounded border bg-white p-4">
+              <h3 className="font-semibold">Indicadores de compras</h3>
+              <p>
+                Total de pedidos: {visible.length} · Atrasados: {summary.late}
+              </p>
+              <ul className="flex flex-wrap gap-3">
+                {purchaseStatuses.map((s) => (
+                  <li key={s}>
+                    {s === "emitido" ? "Aguardando recebimento" : s}: {summary.count(s)}
+                  </li>
+                ))}
+              </ul>
+              <p>
+                Emitidos e não cancelados: {currency(summary.issued)} · Pendentes:{" "}
+                {currency(summary.pending)} · Concluídos: {currency(summary.completed)} ·
+                Cancelados: {currency(summary.cancelled)}
+              </p>
+              <p className="text-sm">
+                Valores contratados. Pagamentos não são contabilizados neste painel.
+              </p>
+              <details>
+                <summary>Resumo por fornecedor</summary>
+                <ul>
+                  {Array.from(suppliersSummary, ([id, rows]) => {
+                    const totals = purchaseSummary(rows, today);
+                    const latest = rows
+                      .filter((o) => o.issued_at)
+                      .map((o) => o.ordered_on)
+                      .sort()
+                      .at(-1);
+                    return (
+                      <li key={id} className="break-words border-t py-2">
+                        {vendorOptions.get(id)} · {rows.length} pedidos · Contratado{" "}
+                        {currency(totals.issued)} · {rows.filter(pendingOrder).length} pendentes ·{" "}
+                        {totals.count("recebido")} concluídos · {totals.count("cancelado")}{" "}
+                        cancelados · Última compra: {latest ?? "—"}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
+            </section>
+          )}
+          {ordered.map((o) => (
             <article
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white p-4"
               key={o.id}
             >
               <span>
                 #{o.number} · {o.supplier_name} · {o.ordered_on} · {o.status} · {currency(o.total)}
+                {lateOrder(o, today)
+                  ? " · Entrega atrasada"
+                  : pendingOrder(o)
+                    ? " · Recebimento pendente"
+                    : ""}
               </span>
               <Button variant="outline" onClick={() => open(o)}>
                 Visualizar
@@ -275,13 +401,9 @@ export function PurchaseManager({
                           .filter((p) => p.active)
                           .map((p) => ({ id: p.id, name: p.name, code: p.code, unit: p.use_unit }));
                   const material = catalog?.find((m) => m.id === line.id);
-                  const shift = material
-                    ? ingredientUnitShift(line.content_unit, material.unit)
-                    : undefined;
-                  const receipt =
-                    shift === undefined
-                      ? null
-                      : new Decimal(line.qty).times(line.content).times(new Decimal(10).pow(shift));
+                  const receipt = material
+                    ? expectedReceipt(line.qty, line.content, line.content_unit, material.unit)
+                    : null;
                   return (
                     <div className="grid gap-3 rounded border p-3 sm:grid-cols-2" key={i}>
                       <label>
@@ -364,6 +486,13 @@ export function PurchaseManager({
                         Previsto: {receipt?.toString() ?? "—"} {material?.unit} · Total:{" "}
                         {currency(new Decimal(line.qty).times(line.price))}
                       </p>
+                      {receipt && material && !receivable(receipt, material.unit) && (
+                        <p role="alert" className="text-red-800">
+                          {material.name}: ajuste a quantidade prevista de {receipt.toString()}{" "}
+                          {material.unit} para um valor recebível (até quatro casas decimais ou
+                          inteiro para unidade/pacote).
+                        </p>
+                      )}
                       {line.kind === "ingrediente" && line.id && vendor && (
                         <Button
                           type="button"

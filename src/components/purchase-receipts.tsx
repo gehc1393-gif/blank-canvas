@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import { receivedProgress } from "@/lib/purchase-report";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -34,11 +34,16 @@ export function PurchaseReceipts({
     new Date(),
   );
   const lines = order.items.map((item) => {
-    const received = (history.data ?? [])
-      .flatMap((r) => r.items)
-      .filter((line) => line.line_id === item.line_id)
-      .reduce((sum, line) => sum.plus(line.qty), new Decimal(0));
-    return { ...item, received, pending: new Decimal(item.receipt).minus(received) };
+    return {
+      ...item,
+      ...receivedProgress(
+        item.receipt,
+        (history.data ?? [])
+          .flatMap((r) => r.items)
+          .filter((line) => line.line_id === item.line_id)
+          .map((line) => line.qty),
+      ),
+    };
   });
   return (
     <section className="space-y-3 border-t pt-3">
@@ -54,6 +59,25 @@ export function PurchaseReceipts({
         </Button>
       )}
       {message && <p role="status">{message}</p>}
+      {history.isSuccess && (
+        <>
+          <p>
+            Último recebimento:{" "}
+            {history.data
+              .map((r) => r.received_on)
+              .sort()
+              .at(-1) ?? "—"}
+          </p>
+          <ul>
+            {lines.map((line) => (
+              <li key={line.line_id} className="break-words">
+                {line.name} · Solicitado {line.receipt} · Recebido {line.received.toString()} ·
+                Pendente {line.pending.toString()} {line.stock_unit} · {line.percent}%
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {open && allowed && (
         <form
           className="space-y-3"
